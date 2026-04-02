@@ -1,4 +1,4 @@
-# ClientHub — Plataforma SaaS Multi-Tenant de Gestão de Clientes
+# ClientHub — Plataforma SaaS de Gestão de Clientes
 
 Sistema completo de gestão de clientes com isolamento multi-tenant, onde cada empresa (tenant) possui sua própria base de clientes. Interface web com design inspirado na Apple e API REST documentada com Swagger.
 
