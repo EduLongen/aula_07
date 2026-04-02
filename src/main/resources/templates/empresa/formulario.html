@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Empresa — ClientHub</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<div class="app-container">
+    <div th:replace="~{fragments/navbar :: navbar}"></div>
+    <main class="main-content">
+        <div th:replace="~{fragments/messages :: messages}"></div>
+
+        <div class="page-header">
+            <h1 th:text="${empresa.id != null} ? 'Editar Empresa' : 'Nova Empresa'">Nova Empresa</h1>
+        </div>
+
+        <div class="form-container">
+            <form th:action="@{/empresas/salvar}" th:object="${empresa}" method="post">
+                <input type="hidden" th:field="*{id}">
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="nome">Nome</label>
+                        <input type="text" id="nome" th:field="*{nome}" required
+                               th:errorclass="campo-erro" placeholder="Nome da empresa">
+                        <div class="error-message" th:if="${#fields.hasErrors('nome')}" th:errors="*{nome}">Erro</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="cnpj">CNPJ</label>
+                        <input type="text" id="cnpj" th:field="*{cnpj}" required
+                               th:errorclass="campo-erro" placeholder="14 dígitos sem pontuação" maxlength="14">
+                        <div class="error-message" th:if="${#fields.hasErrors('cnpj')}" th:errors="*{cnpj}">Erro</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" th:field="*{email}" required
+                               th:errorclass="campo-erro" placeholder="contato@empresa.com">
+                        <div class="error-message" th:if="${#fields.hasErrors('email')}" th:errors="*{email}">Erro</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="plano">Plano</label>
+                        <select id="plano" th:field="*{plano}">
+                            <option value="">Selecione um plano</option>
+                            <option th:each="p : ${planos}" th:value="${p}" th:text="${p}">Plano</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                    <a th:href="@{/empresas}" class="btn btn-secondary">Cancelar</a>
+                </div>
+            </form>
+        </div>
+    </main>
+</div>
+
+<div class="modal-overlay" id="modal-confirmacao">
+    <div class="modal-content">
+        <h3>Confirmar ação</h3>
+        <p>Tem certeza que deseja desativar este registro?</p>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" id="modal-cancelar">Cancelar</button>
+            <button class="btn btn-danger" id="modal-confirmar">Desativar</button>
+        </div>
+    </div>
+</div>
+<script th:src="@{/js/app.js}"></script>
+</body>
+</html>

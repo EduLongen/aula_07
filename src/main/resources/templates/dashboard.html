@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard — ClientHub</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<div class="app-container">
+    <div th:replace="~{fragments/navbar :: navbar}"></div>
+    <main class="main-content">
+        <div th:replace="~{fragments/messages :: messages}"></div>
+
+        <div class="page-header">
+            <h1>Dashboard</h1>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="dashboard-card">
+                <div class="card-icon">🏢</div>
+                <div class="card-value" th:text="${dashboard.totalEmpresas}">0</div>
+                <div class="card-label">Total Empresas</div>
+            </div>
+            <div class="dashboard-card">
+                <div class="card-icon">✅</div>
+                <div class="card-value" th:text="${dashboard.empresasAtivas}">0</div>
+                <div class="card-label">Empresas Ativas</div>
+            </div>
+            <div class="dashboard-card">
+                <div class="card-icon">👥</div>
+                <div class="card-value" th:text="${dashboard.totalClientes}">0</div>
+                <div class="card-label">Total Clientes</div>
+            </div>
+            <div class="dashboard-card">
+                <div class="card-icon">🟢</div>
+                <div class="card-value" th:text="${dashboard.clientesAtivos}">0</div>
+                <div class="card-label">Clientes Ativos</div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<div class="modal-overlay" id="modal-confirmacao">
+    <div class="modal-content">
+        <h3>Confirmar ação</h3>
+        <p>Tem certeza que deseja desativar este registro?</p>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" id="modal-cancelar">Cancelar</button>
+            <button class="btn btn-danger" id="modal-confirmar">Desativar</button>
+        </div>
+    </div>
+</div>
+<script th:src="@{/js/app.js}"></script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+### Maven ###
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### Spring Boot ###
+# Arquivos gerados pelo Spring Boot DevTools
+spring-shell.log
+
+### Banco de dados H2 (arquivos locais gerados pelo perfil h2) ###
+data/
+
+### Variáveis de ambiente e segredos — NUNCA commitar ###
+.env
+.env.*
+*.env
+secrets.properties
+application-local.properties
+
+### Logs ###
+*.log
+logs/
+
+### Arquivos gerados pelo Sistema Operacional ###
+.DS_Store
+Thumbs.db
+
+### IDEs ###
+.idea/
+*.iws
+*.iml
+*.ipr
+.vscode/
+.classpath
+.project
+.settings/
+.factorypath
+.apt_generated
+.springBeans
+.sts4-cache
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/

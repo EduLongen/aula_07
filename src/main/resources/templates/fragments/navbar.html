@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<nav class="navbar" th:fragment="navbar">
+    <div class="navbar-logo">ClientHub</div>
+    <div class="navbar-links">
+        <a th:href="@{/}" class="navbar-link"
+           th:classappend="${currentPage == 'dashboard'} ? 'active'">
+            <span class="icon">📊</span> Dashboard
+        </a>
+        <a th:href="@{/empresas}" class="navbar-link"
+           th:classappend="${currentPage == 'empresas'} ? 'active'">
+            <span class="icon">🏢</span> Empresas
+        </a>
+        <div class="navbar-divider"></div>
+        <a href="/swagger-ui.html" target="_blank" class="navbar-link">
+            <span class="icon">📋</span> API Docs
+        </a>
+    </div>
+</nav>
+</body>
+</html>

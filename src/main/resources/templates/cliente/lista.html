@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Clientes — ClientHub</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<div class="app-container">
+    <div th:replace="~{fragments/navbar :: navbar}"></div>
+    <main class="main-content">
+        <div th:replace="~{fragments/messages :: messages}"></div>
+
+        <div class="page-header">
+            <h1>Clientes — <span th:text="${empresa.nome}">Empresa</span></h1>
+            <div class="btn-group">
+                <a th:href="@{/empresas/{id}/clientes/novo(id=${empresa.id})}" class="btn btn-primary">+ Novo Cliente</a>
+                <a th:href="@{/empresas/{id}(id=${empresa.id})}" class="btn btn-secondary">Voltar</a>
+            </div>
+        </div>
+
+        <form th:action="@{/empresas/{id}/clientes(id=${empresa.id})}" method="get" class="search-bar">
+            <input type="text" name="nome" placeholder="Pesquisar por nome..." th:value="${param.nome}">
+            <button type="submit" class="btn btn-primary">Pesquisar</button>
+        </form>
+
+        <div th:if="${#lists.isEmpty(clientes)}" class="empty-state">
+            <div class="empty-icon">👥</div>
+            <p>Nenhum cliente encontrado</p>
+        </div>
+
+        <div th:if="${!#lists.isEmpty(clientes)}" class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nome</th>
+                        <th>Email</th>
+                        <th>Telefone</th>
+                        <th>Cidade/UF</th>
+                        <th>Status</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="cliente : ${clientes}">
+                        <td th:text="${cliente.nome}">Nome</td>
+                        <td th:text="${cliente.email}">email@example.com</td>
+                        <td th:text="${cliente.telefone ?: '-'}">Telefone</td>
+                        <td th:text="${cliente.cidade != null ? cliente.cidade + '/' + cliente.uf : '-'}">Cidade/UF</td>
+                        <td>
+                            <span class="badge"
+                                  th:classappend="${cliente.ativo} ? 'badge-ativo' : 'badge-inativo'"
+                                  th:text="${cliente.ativo} ? 'Ativo' : 'Inativo'">Ativo</span>
+                        </td>
+                        <td>
+                            <div class="btn-group">
+                                <a th:href="@{/empresas/{eid}/clientes/{cid}/editar(eid=${empresa.id},cid=${cliente.id})}" class="btn btn-secondary btn-sm">Editar</a>
+                                <form th:if="${cliente.ativo}" th:action="@{/empresas/{eid}/clientes/{cid}/desativar(eid=${empresa.id},cid=${cliente.id})}" method="post" class="form-desativar">
+                                    <button type="submit" class="btn btn-danger btn-sm">Desativar</button>
+                                </form>
+                                <form th:if="${!cliente.ativo}" th:action="@{/empresas/{eid}/clientes/{cid}/ativar(eid=${empresa.id},cid=${cliente.id})}" method="post">
+                                    <button type="submit" class="btn btn-success btn-sm">Ativar</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+</div>
+
+<div class="modal-overlay" id="modal-confirmacao">
+    <div class="modal-content">
+        <h3>Confirmar ação</h3>
+        <p>Tem certeza que deseja desativar este cliente?</p>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" id="modal-cancelar">Cancelar</button>
+            <button class="btn btn-danger" id="modal-confirmar">Desativar</button>
+        </div>
+    </div>
+</div>
+<script th:src="@{/js/app.js}"></script>
+</body>
+</html>

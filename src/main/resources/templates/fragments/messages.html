@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<div th:fragment="messages">
+    <div class="toast-container">
+        <div th:if="${mensagemSucesso}" class="toast toast-sucesso" th:text="${mensagemSucesso}"></div>
+        <div th:if="${mensagemErro}" class="toast toast-erro" th:text="${mensagemErro}"></div>
+    </div>
+</div>
+</body>
+</html>

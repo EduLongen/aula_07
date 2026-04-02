@@ -1,0 +1,83 @@
+# =============================================================================
+# Docker Compose — orquestra múltiplos containers como um único serviço
+# =============================================================================
+# Comando para subir tudo:
+#   macOS/Linux: docker compose up --build
+#   Windows:     docker-compose up --build
+#
+# O --build reconstrói a imagem da aplicação antes de subir.
+# Para reiniciar sem rebuild: docker compose up
+# Para parar tudo:            docker compose down
+# Para parar e apagar dados:  docker compose down -v
+
+version: '3.8'
+
+services:
+
+  # ===========================================================================
+  # Serviço 1: banco de dados PostgreSQL
+  # ===========================================================================
+  postgres:
+    # Usa a imagem oficial do PostgreSQL versão 16 (alpine = imagem menor)
+    image: postgres:16-alpine
+    container_name: clienthub-db
+
+    # Variáveis de ambiente que o PostgreSQL usa na primeira inicialização
+    # para criar o banco, usuário e senha automaticamente
+    environment:
+      POSTGRES_DB: clienthub       # cria o banco de dados "clienthub"
+      POSTGRES_USER: postgres      # usuário administrador
+      POSTGRES_PASSWORD: postgres  # senha do usuário
+
+    # Publica a porta 5432 do container na porta 5432 do host
+    # Formato: "porta_host:porta_container"
+    # Isso permite conectar via DBeaver/pgAdmin no localhost:5432
+    ports:
+      - "5432:5432"
+
+    # Volume nomeado: persiste os dados do banco mesmo após o container ser removido
+    # Sem isso, todos os dados seriam perdidos ao fazer "docker compose down"
+    volumes:
+      - clienthub_data:/var/lib/postgresql/data
+
+    # Health Check: verifica se o PostgreSQL está pronto para aceitar conexões
+    # O serviço "app" só sobe após este healthcheck passar
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s   # verifica a cada 5 segundos
+      timeout: 5s    # espera no máximo 5s pela resposta
+      retries: 5     # tenta 5 vezes antes de considerar "unhealthy"
+
+  # ===========================================================================
+  # Serviço 2: aplicação Spring Boot
+  # ===========================================================================
+  app:
+    # Constrói a imagem usando o Dockerfile na pasta atual (.)
+    build: .
+    container_name: clienthub-app
+
+    # Publica a porta 8080 do container na porta 8080 do host
+    # Acesse a aplicação em: http://localhost:8080
+    ports:
+      - "8080:8080"
+
+    # Variáveis de ambiente que sobrescrevem o application-postgres.properties
+    # "postgres" no datasource URL refere-se ao NOME DO SERVIÇO acima, não "localhost"
+    # O Docker Compose cria uma rede interna onde os serviços se comunicam pelo nome
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/clienthub
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+
+    # Garante que o app só sobe APÓS o PostgreSQL estar saudável (healthcheck ok)
+    # Sem isso, o Spring Boot tentaria conectar antes do banco estar pronto
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+# =============================================================================
+# Volumes nomeados — gerenciados pelo Docker, persistem entre restarts
+# =============================================================================
+volumes:
+  clienthub_data:
+    # Docker armazena em: /var/lib/docker/volumes/clienthub_clienthub_data/
