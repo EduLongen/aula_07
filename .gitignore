@@ -15,6 +15,7 @@ data/
 .env
 .env.*
 *.env
+!.env.example
 secrets.properties
 application-local.properties
 

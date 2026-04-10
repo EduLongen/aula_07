@@ -1,6 +1,17 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <body>
+<!--
+Navbar lateral — menu de navegação fixo à esquerda.
+
+CONCEITO: sec:authorize
+O atributo sec:authorize do thymeleaf-extras-springsecurity6 permite
+mostrar/esconder elementos HTML conforme a role do usuário autenticado.
+
+Exemplo: sec:authorize="hasRole('ADMIN')" → só ADMIN vê este elemento.
+O Spring Security avalia a expressão e o Thymeleaf renderiza ou remove o HTML.
+-->
 <nav class="navbar" th:fragment="navbar">
     <div class="navbar-logo">ClientHub</div>
     <div class="navbar-links">
@@ -12,10 +23,44 @@
            th:classappend="${currentPage == 'empresas'} ? 'active'">
             <span class="icon">🏢</span> Empresas
         </a>
+
+        <!-- Link "Usuários" — visível APENAS para ADMIN -->
+        <a th:href="@{/usuarios}" class="navbar-link"
+           th:classappend="${currentPage == 'usuarios'} ? 'active'"
+           sec:authorize="hasRole('ADMIN')">
+            <span class="icon">👤</span> Usuários
+        </a>
+
         <div class="navbar-divider"></div>
-        <a href="/swagger-ui.html" target="_blank" class="navbar-link">
+
+        <!-- Link "API Docs" — visível APENAS para ADMIN -->
+        <a href="/swagger-ui.html" target="_blank" class="navbar-link"
+           sec:authorize="hasRole('ADMIN')">
             <span class="icon">📋</span> API Docs
         </a>
+    </div>
+
+    <!--
+    Seção do usuário logado no rodapé da navbar.
+    Exibe nome, role como badge e botão de logout.
+    th:if="${usuario}" garante que só exibe se houver usuário logado.
+    -->
+    <div class="navbar-user" th:if="${usuario}">
+        <div class="navbar-divider"></div>
+        <div class="navbar-user-info">
+            <span class="navbar-user-name" th:text="${usuario.nome}">Usuário</span>
+            <span class="badge badge-sm"
+                  th:classappend="${usuario.role.name() == 'ADMIN'} ? 'badge-role-admin' : (${usuario.role.name() == 'GESTOR'} ? 'badge-role-gestor' : 'badge-role-usuario')"
+                  th:text="${usuario.role}">ADMIN</span>
+        </div>
+        <!--
+        Formulário de logout: POST /logout
+        O Spring Security intercepta este POST e invalida a sessão.
+        O token CSRF é adicionado automaticamente pelo Thymeleaf via th:action.
+        -->
+        <form th:action="@{/logout}" method="post">
+            <button type="submit" class="btn btn-secondary btn-sm navbar-logout-btn">Sair</button>
+        </form>
     </div>
 </nav>
 </body>

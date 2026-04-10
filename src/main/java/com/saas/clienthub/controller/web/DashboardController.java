@@ -1,6 +1,9 @@
 package com.saas.clienthub.controller.web;
 
+import com.saas.clienthub.model.entity.Role;
+import com.saas.clienthub.model.entity.Usuario;
 import com.saas.clienthub.service.EmpresaService;
+import com.saas.clienthub.service.UsuarioService;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -42,9 +45,11 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 public class DashboardController {
 
     private final EmpresaService empresaService;
+    private final UsuarioService usuarioService;
 
-    public DashboardController(EmpresaService empresaService) {
+    public DashboardController(EmpresaService empresaService, UsuarioService usuarioService) {
         this.empresaService = empresaService;
+        this.usuarioService = usuarioService;
     }
 
     /**
@@ -57,15 +62,41 @@ public class DashboardController {
         return "dashboard";
     }
 
+    /** Adiciona o usuário logado ao model para exibir na navbar */
+    @ModelAttribute("usuario")
+    public Usuario usuarioLogado() {
+        return usuarioService.getUsuarioLogado();
+    }
+
     /**
-     * GET / → exibe o dashboard com os totais da plataforma.
+     * GET / → exibe o dashboard.
      *
-     * model.addAttribute("dashboard", ...) → o template acessa com ${dashboard.totalEmpresas}, etc.
-     * return "dashboard" → o Spring renderiza /templates/dashboard.html
+     * Comportamento por role:
+     * - ADMIN: dashboard global (todas empresas, todos clientes)
+     * - GESTOR/USUARIO: dashboard da empresa do usuário
      */
     @GetMapping("/")
     public String dashboard(Model model) {
-        model.addAttribute("dashboard", empresaService.buscarDashboard());
+        Usuario usuario = usuarioService.getUsuarioLogado();
+
+        if (usuario != null) {
+            model.addAttribute("role", usuario.getRole().name());
+
+            if (usuario.getRole() == Role.ADMIN) {
+                // ADMIN: dashboard global com totais de toda a plataforma
+                model.addAttribute("dashboard", empresaService.buscarDashboard());
+            } else if (usuario.getEmpresa() != null) {
+                // GESTOR/USUARIO: dados da sua empresa
+                model.addAttribute("empresaNome", usuario.getEmpresa().getNome());
+                model.addAttribute("empresaId", usuario.getEmpresa().getId());
+                model.addAttribute("dashboard", empresaService.buscarDashboardEmpresa(usuario.getEmpresa().getId()));
+            }
+        } else {
+            // Fallback sem autenticação (não deveria acontecer, mas seguro)
+            model.addAttribute("dashboard", empresaService.buscarDashboard());
+            model.addAttribute("role", "ADMIN");
+        }
+
         return "dashboard"; // → src/main/resources/templates/dashboard.html
     }
 }

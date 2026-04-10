@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login — ClientHub</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body class="login-body">
+    <!--
+    Página de login — standalone (sem navbar lateral).
+    O Spring Security processa o POST /login automaticamente.
+    Os campos DEVEM ter name="username" e name="password".
+    O Thymeleaf adiciona o token CSRF automaticamente com th:action.
+    -->
+    <div class="login-container">
+        <div class="login-card">
+            <!-- Logo da aplicação -->
+            <div class="login-logo">ClientHub</div>
+            <p class="login-subtitle">Faça login para acessar a plataforma</p>
+
+            <!-- Mensagem de erro — exibida quando ?error=true na URL -->
+            <div th:if="${param.error}" class="login-alert login-alert-error">
+                Email ou senha inválidos.
+            </div>
+
+            <!-- Mensagem de logout — exibida quando ?logout=true na URL -->
+            <div th:if="${param.logout}" class="login-alert login-alert-success">
+                Você saiu com sucesso.
+            </div>
+
+            <!--
+            Formulário de login:
+            - th:action="@{/login}" gera action="/login" + token CSRF hidden
+            - method="post" envia as credenciais de forma segura
+            - name="username" → Spring Security usa como identificador (email)
+            - name="password" → Spring Security usa para verificar a senha
+            -->
+            <form th:action="@{/login}" method="post">
+                <div class="form-group">
+                    <label for="username">Email</label>
+                    <input type="email" id="username" name="username"
+                           placeholder="seu@email.com" required autofocus>
+                </div>
+                <div class="form-group">
+                    <label for="password">Senha</label>
+                    <input type="password" id="password" name="password"
+                           placeholder="Sua senha" required>
+                </div>
+                <button type="submit" class="btn btn-primary login-btn">Entrar</button>
+            </form>
+        </div>
+        <p class="login-footer">ClientHub SaaS &copy; 2025</p>
+    </div>
+</body>
+</html>

@@ -3,8 +3,11 @@ package com.saas.clienthub.controller.web;
 import com.saas.clienthub.model.dto.EmpresaRequestDTO;
 import com.saas.clienthub.model.entity.Empresa;
 import com.saas.clienthub.model.entity.Plano;
+import com.saas.clienthub.model.entity.Role;
+import com.saas.clienthub.model.entity.Usuario;
 import com.saas.clienthub.service.ClienteService;
 import com.saas.clienthub.service.EmpresaService;
+import com.saas.clienthub.service.UsuarioService;
 import jakarta.validation.Valid;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -59,10 +62,14 @@ public class EmpresaWebController {
 
     private final EmpresaService empresaService;
     private final ClienteService clienteService;
+    private final UsuarioService usuarioService;
 
-    public EmpresaWebController(EmpresaService empresaService, ClienteService clienteService) {
+    public EmpresaWebController(EmpresaService empresaService,
+                                ClienteService clienteService,
+                                UsuarioService usuarioService) {
         this.empresaService = empresaService;
         this.clienteService = clienteService;
+        this.usuarioService = usuarioService;
     }
 
     /** Adiciona "currentPage" = "empresas" ao model de todos os handlers desta classe */
@@ -71,12 +78,25 @@ public class EmpresaWebController {
         return "empresas";
     }
 
+    /** Adiciona o usuário logado ao model para exibir na navbar */
+    @ModelAttribute("usuario")
+    public Usuario usuarioLogado() {
+        return usuarioService.getUsuarioLogado();
+    }
+
     /**
-     * GET /empresas → lista todas as empresas.
-     * return "empresa/lista" → renderiza /templates/empresa/lista.html
+     * GET /empresas → lista todas as empresas (ADMIN) ou redireciona para a empresa do usuário.
+     * GESTOR/USUARIO não veem a lista — são redirecionados para os detalhes da sua empresa.
      */
     @GetMapping
     public String listar(Model model) {
+        Usuario usuario = usuarioService.getUsuarioLogado();
+
+        // Não-ADMIN → redireciona direto para a página da sua empresa
+        if (usuario != null && usuario.getRole() != Role.ADMIN && usuario.getEmpresa() != null) {
+            return "redirect:/empresas/" + usuario.getEmpresa().getId();
+        }
+
         model.addAttribute("empresas", empresaService.listarTodas());
         return "empresa/lista";
     }

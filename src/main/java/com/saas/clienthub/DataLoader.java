@@ -4,12 +4,16 @@ import com.saas.clienthub.model.dto.EnderecoViaCepDTO;
 import com.saas.clienthub.model.entity.Cliente;
 import com.saas.clienthub.model.entity.Empresa;
 import com.saas.clienthub.model.entity.Plano;
+import com.saas.clienthub.model.entity.Role;
+import com.saas.clienthub.model.entity.Usuario;
 import com.saas.clienthub.repository.ClienteRepository;
 import com.saas.clienthub.repository.EmpresaRepository;
+import com.saas.clienthub.repository.UsuarioRepository;
 import com.saas.clienthub.service.ViaCepService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
@@ -57,7 +61,9 @@ public class DataLoader implements CommandLineRunner {
 
     private final EmpresaRepository empresaRepository;
     private final ClienteRepository clienteRepository;
+    private final UsuarioRepository usuarioRepository;
     private final ViaCepService viaCepService;
+    private final PasswordEncoder passwordEncoder;
 
     /**
      * Mapa de endereços hardcoded usados como fallback quando a API ViaCEP falha.
@@ -80,10 +86,14 @@ public class DataLoader implements CommandLineRunner {
 
     public DataLoader(EmpresaRepository empresaRepository,
                       ClienteRepository clienteRepository,
-                      ViaCepService viaCepService) {
+                      UsuarioRepository usuarioRepository,
+                      ViaCepService viaCepService,
+                      PasswordEncoder passwordEncoder) {
         this.empresaRepository = empresaRepository;
         this.clienteRepository = clienteRepository;
+        this.usuarioRepository = usuarioRepository;
         this.viaCepService = viaCepService;
+        this.passwordEncoder = passwordEncoder;
     }
 
     /**
@@ -92,61 +102,138 @@ public class DataLoader implements CommandLineRunner {
      */
     @Override
     public void run(String... args) {
-        // Idempotência: só carrega dados se o banco estiver vazio
-        if (empresaRepository.count() > 0) {
+        // Idempotência: só carrega empresas/clientes se o banco estiver vazio
+        boolean empresasExistem = empresaRepository.count() > 0;
+
+        if (empresasExistem && usuarioRepository.count() > 0) {
+            // Empresas e usuários já existem — nada a fazer
             return;
         }
 
         log.info("Carregando dados de exemplo...");
 
-        // ============================================================
-        // Empresa 1: TechNova Solutions — Plano ENTERPRISE
-        // ============================================================
-        // save() faz o INSERT no banco e retorna a entidade com o ID gerado
-        Empresa techNova = empresaRepository.save(Empresa.builder()
-                .nome("TechNova Solutions")
-                .cnpj("11222333000181")
-                .email("contato@technova.com.br")
-                .plano(Plano.ENTERPRISE)
-                .build());
+        // Variáveis para as empresas — podem vir do banco ou ser criadas agora
+        Empresa techNova;
+        Empresa cafeArte;
+        Empresa startupZero;
 
-        // Para cada cliente, tentamos buscar o endereço via ViaCEP
-        criarCliente(techNova, "Ana Silva", "ana.silva@email.com", "(11) 98765-4321", "01001000");
-        criarCliente(techNova, "Carlos Oliveira", "carlos.oliveira@email.com", "(21) 97654-3210", "20040020");
-        criarCliente(techNova, "Marina Santos", "marina.santos@email.com", "(31) 96543-2109", "30130000");
-        criarCliente(techNova, "Pedro Costa", "pedro.costa@email.com", "(41) 95432-1098", "80020310");
+        if (!empresasExistem) {
+            // ============================================================
+            // Empresa 1: TechNova Solutions — Plano ENTERPRISE
+            // ============================================================
+            techNova = empresaRepository.save(Empresa.builder()
+                    .nome("TechNova Solutions")
+                    .cnpj("11222333000181")
+                    .email("contato@technova.com.br")
+                    .plano(Plano.ENTERPRISE)
+                    .build());
+
+            criarCliente(techNova, "Ana Silva", "ana.silva@email.com", "(11) 98765-4321", "01001000");
+            criarCliente(techNova, "Carlos Oliveira", "carlos.oliveira@email.com", "(21) 97654-3210", "20040020");
+            criarCliente(techNova, "Marina Santos", "marina.santos@email.com", "(31) 96543-2109", "30130000");
+            criarCliente(techNova, "Pedro Costa", "pedro.costa@email.com", "(41) 95432-1098", "80020310");
+
+            // ============================================================
+            // Empresa 2: Café & Arte Ltda — Plano PROFISSIONAL
+            // ============================================================
+            cafeArte = empresaRepository.save(Empresa.builder()
+                    .nome("Café & Arte Ltda")
+                    .cnpj("44555666000199")
+                    .email("contato@cafearte.com.br")
+                    .plano(Plano.PROFISSIONAL)
+                    .build());
+
+            criarCliente(cafeArte, "Julia Ferreira", "julia.ferreira@email.com", "(71) 94321-0987", "40020000");
+            criarCliente(cafeArte, "Rafael Souza", "rafael.souza@email.com", "(85) 93210-9876", "60060440");
+            criarCliente(cafeArte, "Beatriz Lima", "beatriz.lima@email.com", "(92) 92109-8765", "69005040");
+
+            // ============================================================
+            // Empresa 3: StartUp Zero — Plano BASICO
+            // ============================================================
+            startupZero = empresaRepository.save(Empresa.builder()
+                    .nome("StartUp Zero")
+                    .cnpj("77888999000155")
+                    .email("hello@startupzero.io")
+                    .plano(Plano.BASICO)
+                    .build());
+
+            criarCliente(startupZero, "Lucas Mendes", "lucas.mendes@email.com", "(48) 91098-7654", "88010000");
+            criarCliente(startupZero, "Camila Rocha", "camila.rocha@email.com", "(81) 90987-6543", "50010000");
+        } else {
+            // Empresas já existem no banco — busca por CNPJ para vincular aos usuários
+            techNova = empresaRepository.findByCnpj("11222333000181").orElse(null);
+            cafeArte = empresaRepository.findByCnpj("44555666000199").orElse(null);
+            startupZero = empresaRepository.findByCnpj("77888999000155").orElse(null);
+            log.info("Empresas já existem no banco. Criando apenas os usuários...");
+        }
 
         // ============================================================
-        // Empresa 2: Café & Arte Ltda — Plano PROFISSIONAL
+        // Criação de Usuários de exemplo (se ainda não existirem)
         // ============================================================
-        Empresa cafeArte = empresaRepository.save(Empresa.builder()
-                .nome("Café & Arte Ltda")
-                .cnpj("44555666000199")
-                .email("contato@cafearte.com.br")
-                .plano(Plano.PROFISSIONAL)
-                .build());
+        // Todas as senhas são criptografadas com BCrypt antes de salvar.
+        // NUNCA armazene senhas em texto puro no banco de dados.
+        if (usuarioRepository.count() == 0) {
+            // 1. ADMIN — acesso global, sem empresa vinculada
+            usuarioRepository.save(Usuario.builder()
+                    .nome("Administrador")
+                    .email("admin@clienthub.com")
+                    .senha(passwordEncoder.encode("admin123"))
+                    .role(Role.ADMIN)
+                    .empresa(null) // ADMIN não pertence a nenhuma empresa
+                    .build());
 
-        criarCliente(cafeArte, "Julia Ferreira", "julia.ferreira@email.com", "(71) 94321-0987", "40020000");
-        criarCliente(cafeArte, "Rafael Souza", "rafael.souza@email.com", "(85) 93210-9876", "60060440");
-        criarCliente(cafeArte, "Beatriz Lima", "beatriz.lima@email.com", "(92) 92109-8765", "69005040");
+            // 2. GESTOR da TechNova Solutions
+            if (techNova != null) {
+                usuarioRepository.save(Usuario.builder()
+                        .nome("João Silva")
+                        .email("joao@technova.com")
+                        .senha(passwordEncoder.encode("gestor123"))
+                        .role(Role.GESTOR)
+                        .empresa(techNova)
+                        .build());
+            }
 
-        // ============================================================
-        // Empresa 3: StartUp Zero — Plano BASICO
-        // ============================================================
-        Empresa startupZero = empresaRepository.save(Empresa.builder()
-                .nome("StartUp Zero")
-                .cnpj("77888999000155")
-                .email("hello@startupzero.io")
-                .plano(Plano.BASICO)
-                .build());
+            // 3. GESTOR do Café & Arte
+            if (cafeArte != null) {
+                usuarioRepository.save(Usuario.builder()
+                        .nome("Maria Souza")
+                        .email("maria@cafearte.com")
+                        .senha(passwordEncoder.encode("gestor123"))
+                        .role(Role.GESTOR)
+                        .empresa(cafeArte)
+                        .build());
+            }
 
-        criarCliente(startupZero, "Lucas Mendes", "lucas.mendes@email.com", "(48) 91098-7654", "88010000");
-        criarCliente(startupZero, "Camila Rocha", "camila.rocha@email.com", "(81) 90987-6543", "50010000");
+            // 4. GESTOR da StartUp Zero
+            if (startupZero != null) {
+                usuarioRepository.save(Usuario.builder()
+                        .nome("Ana Costa")
+                        .email("ana@startupzero.com")
+                        .senha(passwordEncoder.encode("gestor123"))
+                        .role(Role.GESTOR)
+                        .empresa(startupZero)
+                        .build());
+            }
+
+            // 5. USUARIO da TechNova (acesso básico, apenas visualização)
+            if (techNova != null) {
+                usuarioRepository.save(Usuario.builder()
+                        .nome("Pedro Santos")
+                        .email("pedro@technova.com")
+                        .senha(passwordEncoder.encode("user123"))
+                        .role(Role.USUARIO)
+                        .empresa(techNova)
+                        .build());
+            }
+
+            log.info("Usuários de exemplo criados. Login admin: admin@clienthub.com / admin123");
+        }
 
         // Loga o resumo dos dados carregados
         long totalEmpresas = empresaRepository.count();
         long totalClientes = clienteRepository.count();
-        log.info("Dados de exemplo carregados: {} empresas, {} clientes", totalEmpresas, totalClientes);
+        long totalUsuarios = usuarioRepository.count();
+        log.info("Dados de exemplo carregados: {} empresas, {} clientes, {} usuários", totalEmpresas, totalClientes, totalUsuarios);
     }
 
     /**

@@ -7,8 +7,14 @@ import com.saas.clienthub.model.dto.EmpresaRequestDTO;
 import com.saas.clienthub.model.dto.EmpresaResponseDTO;
 import com.saas.clienthub.model.entity.Empresa;
 import com.saas.clienthub.model.entity.Plano;
+import com.saas.clienthub.model.entity.Role;
+import com.saas.clienthub.model.entity.Usuario;
 import com.saas.clienthub.repository.ClienteRepository;
 import com.saas.clienthub.repository.EmpresaRepository;
+import com.saas.clienthub.repository.UsuarioRepository;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,25 +61,45 @@ public class EmpresaService {
 
     private final EmpresaRepository empresaRepository;
     private final ClienteRepository clienteRepository;
+    private final UsuarioRepository usuarioRepository;
 
     /**
      * Injeção via construtor.
      * O ClienteRepository é necessário para contar clientes no método toResponseDTO.
+     * O UsuarioRepository é necessário para verificar o tenant do usuário logado.
      */
-    public EmpresaService(EmpresaRepository empresaRepository, ClienteRepository clienteRepository) {
+    public EmpresaService(EmpresaRepository empresaRepository,
+                          ClienteRepository clienteRepository,
+                          UsuarioRepository usuarioRepository) {
         this.empresaRepository = empresaRepository;
         this.clienteRepository = clienteRepository;
+        this.usuarioRepository = usuarioRepository;
     }
 
-    /** Retorna todas as empresas (ativas e inativas) convertidas para DTO */
+    /**
+     * Retorna empresas convertidas para DTO.
+     *
+     * Isolamento multi-tenant:
+     * - ADMIN: vê todas as empresas
+     * - GESTOR/USUARIO: vê apenas a própria empresa
+     * - Sem autenticação (API pública): vê todas (JWT futuro restringirá)
+     */
     public List<EmpresaResponseDTO> listarTodas() {
-        // findAll() → SELECT * FROM empresas
-        // .stream() → transforma a lista em Stream para processar elemento a elemento
-        // .map(this::toResponseDTO) → converte cada Empresa → EmpresaResponseDTO
-        // .toList() → coleta o resultado de volta em uma Lista
-        return empresaRepository.findAll().stream()
-                .map(this::toResponseDTO)
-                .toList();
+        Usuario usuarioLogado = getUsuarioLogado();
+
+        // Se não há usuário logado (API pública) ou é ADMIN → retorna todas
+        if (usuarioLogado == null || usuarioLogado.getRole() == Role.ADMIN) {
+            return empresaRepository.findAll().stream()
+                    .map(this::toResponseDTO)
+                    .toList();
+        }
+
+        // GESTOR/USUARIO → retorna apenas a empresa do usuário
+        if (usuarioLogado.getEmpresa() != null) {
+            return List.of(toResponseDTO(usuarioLogado.getEmpresa()));
+        }
+
+        return List.of();
     }
 
     /** Retorna apenas empresas com ativa = true */
@@ -85,12 +111,18 @@ public class EmpresaService {
 
     /**
      * Busca uma empresa pelo ID e retorna como DTO.
-     * orElseThrow → lança ResourceNotFoundException se não existir no banco.
-     * O GlobalExceptionHandler captura essa exceção e retorna HTTP 404.
+     *
+     * Isolamento multi-tenant:
+     * - ADMIN ou sem autenticação: pode ver qualquer empresa
+     * - GESTOR/USUARIO: só pode ver a própria empresa
      */
     public EmpresaResponseDTO buscarPorId(Long id) {
         Empresa empresa = empresaRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Empresa não encontrada com id: " + id));
+
+        // Verifica se o usuário logado tem permissão para ver esta empresa
+        verificarAcessoEmpresa(id);
+
         return toResponseDTO(empresa);
     }
 
@@ -191,6 +223,19 @@ public class EmpresaService {
     }
 
     /**
+     * Monta os dados do Dashboard para uma empresa específica (GESTOR/USUARIO).
+     * Conta apenas os clientes da empresa do usuário logado.
+     */
+    public DashboardDTO buscarDashboardEmpresa(Long empresaId) {
+        return DashboardDTO.builder()
+                .totalEmpresas(1)  // o usuário vê apenas a sua empresa
+                .empresasAtivas(1)
+                .totalClientes(clienteRepository.countByEmpresaId(empresaId))
+                .clientesAtivos(clienteRepository.countByEmpresaIdAndAtivoTrue(empresaId))
+                .build();
+    }
+
+    /**
      * Converte uma entidade Empresa para o DTO de resposta.
      * Método privado — só usado internamente neste Service.
      *
@@ -224,5 +269,35 @@ public class EmpresaService {
                 .email(dto.getEmail())
                 .plano(dto.getPlano() != null ? dto.getPlano() : Plano.BASICO)
                 .build();
+    }
+
+    /**
+     * Obtém o usuário logado a partir do SecurityContextHolder.
+     * Retorna null se não houver autenticação (ex: API pública sem login).
+     */
+    private Usuario getUsuarioLogado() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated()
+                || "anonymousUser".equals(auth.getPrincipal())) {
+            return null;
+        }
+        return usuarioRepository.findByEmail(auth.getName()).orElse(null);
+    }
+
+    /**
+     * Verifica se o usuário logado tem permissão para acessar a empresa informada.
+     * ADMIN e requisições sem autenticação (API) podem acessar qualquer empresa.
+     * GESTOR/USUARIO só podem acessar a própria empresa.
+     */
+    private void verificarAcessoEmpresa(Long empresaId) {
+        Usuario usuarioLogado = getUsuarioLogado();
+        // Sem login (API pública) ou ADMIN → acesso total
+        if (usuarioLogado == null || usuarioLogado.getRole() == Role.ADMIN) {
+            return;
+        }
+        // GESTOR/USUARIO → verifica se é a empresa do usuário
+        if (usuarioLogado.getEmpresa() == null || !usuarioLogado.getEmpresa().getId().equals(empresaId)) {
+            throw new AccessDeniedException("Acesso negado a esta empresa");
+        }
     }
 }

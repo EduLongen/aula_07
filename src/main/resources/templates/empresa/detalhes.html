@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <head>
     <meta charset="UTF-8">
     <title>Detalhes da Empresa — ClientHub</title>
@@ -17,7 +18,8 @@
         <div class="page-header">
             <h1 th:text="${empresa.nome}">Empresa</h1>
             <div class="btn-group">
-                <a th:href="@{/empresas/{id}/editar(id=${empresa.id})}" class="btn btn-secondary">Editar</a>
+                <!-- Botão Editar: visível apenas para ADMIN -->
+                <a th:href="@{/empresas/{id}/editar(id=${empresa.id})}" class="btn btn-secondary" sec:authorize="hasRole('ADMIN')">Editar</a>
                 <a th:href="@{/empresas}" class="btn btn-secondary">Voltar</a>
             </div>
         </div>

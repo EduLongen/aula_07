@@ -7,10 +7,16 @@ import com.saas.clienthub.model.dto.ClienteResponseDTO;
 import com.saas.clienthub.model.dto.EnderecoViaCepDTO;
 import com.saas.clienthub.model.entity.Cliente;
 import com.saas.clienthub.model.entity.Empresa;
+import com.saas.clienthub.model.entity.Role;
+import com.saas.clienthub.model.entity.Usuario;
 import com.saas.clienthub.repository.ClienteRepository;
 import com.saas.clienthub.repository.EmpresaRepository;
+import com.saas.clienthub.repository.UsuarioRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,22 +47,27 @@ public class ClienteService {
 
     private final ClienteRepository clienteRepository;
     private final EmpresaRepository empresaRepository;
+    private final UsuarioRepository usuarioRepository;
     private final ViaCepService viaCepService;  // Dependência para buscar endereço pelo CEP
 
     /** Injeção via construtor — Spring injeta todas as dependências automaticamente */
     public ClienteService(ClienteRepository clienteRepository,
                           EmpresaRepository empresaRepository,
+                          UsuarioRepository usuarioRepository,
                           ViaCepService viaCepService) {
         this.clienteRepository = clienteRepository;
         this.empresaRepository = empresaRepository;
+        this.usuarioRepository = usuarioRepository;
         this.viaCepService = viaCepService;
     }
 
     /**
      * Lista todos os clientes de uma empresa específica.
      * Sempre filtra por empresaId — nunca retorna clientes de outras empresas.
+     * Verifica se o usuário logado tem permissão para acessar esta empresa.
      */
     public List<ClienteResponseDTO> listarPorEmpresa(Long empresaId) {
+        verificarAcessoEmpresa(empresaId);
         return clienteRepository.findByEmpresaId(empresaId).stream()
                 .map(this::toResponseDTO)
                 .toList();
@@ -68,6 +79,7 @@ public class ClienteService {
      * Se o cliente existir mas for de outra empresa → retorna vazio → HTTP 404
      */
     public ClienteResponseDTO buscarPorId(Long empresaId, Long clienteId) {
+        verificarAcessoEmpresa(empresaId);
         Cliente cliente = clienteRepository.findByIdAndEmpresaId(clienteId, empresaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cliente não encontrado com id: " + clienteId));
         return toResponseDTO(cliente);
@@ -86,6 +98,7 @@ public class ClienteService {
      */
     @Transactional
     public ClienteResponseDTO criar(Long empresaId, ClienteRequestDTO dto) {
+        verificarAcessoEmpresa(empresaId);
         // Garante que a empresa existe antes de criar o cliente
         Empresa empresa = empresaRepository.findById(empresaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Empresa não encontrada com id: " + empresaId));
@@ -109,6 +122,7 @@ public class ClienteService {
      */
     @Transactional
     public ClienteResponseDTO atualizar(Long empresaId, Long clienteId, ClienteRequestDTO dto) {
+        verificarAcessoEmpresa(empresaId);
         // Busca o cliente garantindo que pertence à empresa — proteção multi-tenant
         Cliente cliente = clienteRepository.findByIdAndEmpresaId(clienteId, empresaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cliente não encontrado com id: " + clienteId));
@@ -134,6 +148,7 @@ public class ClienteService {
     /** Soft Delete: marca o cliente como inativo sem removê-lo do banco */
     @Transactional
     public void desativar(Long empresaId, Long clienteId) {
+        verificarAcessoEmpresa(empresaId);
         Cliente cliente = clienteRepository.findByIdAndEmpresaId(clienteId, empresaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cliente não encontrado com id: " + clienteId));
         cliente.setAtivo(false);
@@ -143,6 +158,7 @@ public class ClienteService {
     /** Reativa um cliente previamente desativado */
     @Transactional
     public void ativar(Long empresaId, Long clienteId) {
+        verificarAcessoEmpresa(empresaId);
         Cliente cliente = clienteRepository.findByIdAndEmpresaId(clienteId, empresaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cliente não encontrado com id: " + clienteId));
         cliente.setAtivo(true);
@@ -151,6 +167,7 @@ public class ClienteService {
 
     /** Pesquisa clientes por nome dentro de uma empresa (busca parcial, sem case) */
     public List<ClienteResponseDTO> pesquisarPorNome(Long empresaId, String nome) {
+        verificarAcessoEmpresa(empresaId);
         return clienteRepository.findByEmpresaIdAndNomeContainingIgnoreCase(empresaId, nome).stream()
                 .map(this::toResponseDTO)
                 .toList();
@@ -218,5 +235,35 @@ public class ClienteService {
                 .cep(dto.getCep())
                 .empresa(empresa) // associa o cliente ao tenant correto
                 .build();
+    }
+
+    /**
+     * Obtém o usuário logado a partir do SecurityContextHolder.
+     * Retorna null se não houver autenticação (ex: API pública sem login).
+     */
+    private Usuario getUsuarioLogado() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated()
+                || "anonymousUser".equals(auth.getPrincipal())) {
+            return null;
+        }
+        return usuarioRepository.findByEmail(auth.getName()).orElse(null);
+    }
+
+    /**
+     * Verifica se o usuário logado tem permissão para acessar dados da empresa informada.
+     * ADMIN e requisições sem autenticação (API pública) podem acessar qualquer empresa.
+     * GESTOR/USUARIO só podem acessar a própria empresa.
+     */
+    private void verificarAcessoEmpresa(Long empresaId) {
+        Usuario usuarioLogado = getUsuarioLogado();
+        // Sem login (API pública) ou ADMIN → acesso total
+        if (usuarioLogado == null || usuarioLogado.getRole() == Role.ADMIN) {
+            return;
+        }
+        // GESTOR/USUARIO → verifica se é a empresa do usuário
+        if (usuarioLogado.getEmpresa() == null || !usuarioLogado.getEmpresa().getId().equals(empresaId)) {
+            throw new AccessDeniedException("Acesso negado a esta empresa");
+        }
     }
 }

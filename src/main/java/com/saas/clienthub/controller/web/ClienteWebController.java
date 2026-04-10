@@ -2,8 +2,10 @@ package com.saas.clienthub.controller.web;
 
 import com.saas.clienthub.model.dto.ClienteRequestDTO;
 import com.saas.clienthub.model.dto.ClienteResponseDTO;
+import com.saas.clienthub.model.entity.Usuario;
 import com.saas.clienthub.service.ClienteService;
 import com.saas.clienthub.service.EmpresaService;
+import com.saas.clienthub.service.UsuarioService;
 import jakarta.validation.Valid;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -46,16 +48,26 @@ public class ClienteWebController {
 
     private final ClienteService clienteService;
     private final EmpresaService empresaService;
+    private final UsuarioService usuarioService;
 
-    public ClienteWebController(ClienteService clienteService, EmpresaService empresaService) {
+    public ClienteWebController(ClienteService clienteService,
+                                EmpresaService empresaService,
+                                UsuarioService usuarioService) {
         this.clienteService = clienteService;
         this.empresaService = empresaService;
+        this.usuarioService = usuarioService;
     }
 
     /** Garante que todos os templates desta classe saibam que estamos na seção "empresas" */
     @ModelAttribute("currentPage")
     public String currentPage() {
         return "empresas";
+    }
+
+    /** Adiciona o usuário logado ao model para exibir na navbar */
+    @ModelAttribute("usuario")
+    public Usuario usuarioLogado() {
+        return usuarioService.getUsuarioLogado();
     }
 
     /**

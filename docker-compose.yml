@@ -22,12 +22,16 @@ services:
     image: postgres:16-alpine
     container_name: clienthub-db
 
+    # Carrega variáveis do .env (JWT_SECRET, DB_PASSWORD, etc.)
+    env_file:
+      - .env
+
     # Variáveis de ambiente que o PostgreSQL usa na primeira inicialização
     # para criar o banco, usuário e senha automaticamente
     environment:
-      POSTGRES_DB: clienthub       # cria o banco de dados "clienthub"
-      POSTGRES_USER: postgres      # usuário administrador
-      POSTGRES_PASSWORD: postgres  # senha do usuário
+      POSTGRES_DB: clienthub                    # cria o banco de dados "clienthub"
+      POSTGRES_USER: ${DB_USERNAME:-postgres}   # usuário administrador
+      POSTGRES_PASSWORD: ${DB_PASSWORD}         # senha do usuário (vem do .env)
 
     # Publica a porta 5432 do container na porta 5432 do host
     # Formato: "porta_host:porta_container"
@@ -64,10 +68,13 @@ services:
     # Variáveis de ambiente que sobrescrevem o application-postgres.properties
     # "postgres" no datasource URL refere-se ao NOME DO SERVIÇO acima, não "localhost"
     # O Docker Compose cria uma rede interna onde os serviços se comunicam pelo nome
+    # Carrega variáveis do arquivo .env (nunca commitado — ver .env.example)
+    env_file:
+      - .env
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/clienthub
-      SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_DATASOURCE_USERNAME: ${DB_USERNAME:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
 
     # Garante que o app só sobe APÓS o PostgreSQL estar saudável (healthcheck ok)
     # Sem isso, o Spring Boot tentaria conectar antes do banco estar pronto

@@ -58,8 +58,11 @@ public interface ClienteRepository extends JpaRepository<Cliente, Long> {
     /** Conta total de clientes de uma empresa — exibido na tela de detalhes */
     long countByEmpresaId(Long empresaId);
 
-    /** Conta total de clientes ativos em todas as empresas — usado no Dashboard */
+    /** Conta total de clientes ativos em todas as empresas — usado no Dashboard global (ADMIN) */
     long countByAtivoTrue();
+
+    /** Conta clientes ativos de uma empresa específica — usado no Dashboard do tenant */
+    long countByEmpresaIdAndAtivoTrue(Long empresaId);
 
     /**
      * Pesquisa clientes por nome dentro de uma empresa.

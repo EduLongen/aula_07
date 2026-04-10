@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <head>
     <meta charset="UTF-8">
     <title>Empresas — ClientHub</title>
@@ -16,7 +17,8 @@
 
         <div class="page-header">
             <h1>Empresas</h1>
-            <a th:href="@{/empresas/novo}" class="btn btn-primary">+ Nova Empresa</a>
+            <!-- Botão "Nova Empresa" visível apenas para ADMIN -->
+            <a th:href="@{/empresas/novo}" class="btn btn-primary" sec:authorize="hasRole('ADMIN')">+ Nova Empresa</a>
         </div>
 
         <div th:if="${#lists.isEmpty(empresas)}" class="empty-state">
@@ -57,11 +59,12 @@
                         <td>
                             <div class="btn-group">
                                 <a th:href="@{/empresas/{id}(id=${empresa.id})}" class="btn btn-secondary btn-sm">Ver</a>
-                                <a th:href="@{/empresas/{id}/editar(id=${empresa.id})}" class="btn btn-secondary btn-sm">Editar</a>
-                                <form th:if="${empresa.ativa}" th:action="@{/empresas/{id}/desativar(id=${empresa.id})}" method="post" class="form-desativar">
+                                <!-- Editar/Desativar/Ativar: visível apenas para ADMIN -->
+                                <a th:href="@{/empresas/{id}/editar(id=${empresa.id})}" class="btn btn-secondary btn-sm" sec:authorize="hasRole('ADMIN')">Editar</a>
+                                <form th:if="${empresa.ativa}" th:action="@{/empresas/{id}/desativar(id=${empresa.id})}" method="post" class="form-desativar" sec:authorize="hasRole('ADMIN')">
                                     <button type="submit" class="btn btn-danger btn-sm">Desativar</button>
                                 </form>
-                                <form th:if="${!empresa.ativa}" th:action="@{/empresas/{id}/ativar(id=${empresa.id})}" method="post">
+                                <form th:if="${!empresa.ativa}" th:action="@{/empresas/{id}/ativar(id=${empresa.id})}" method="post" sec:authorize="hasRole('ADMIN')">
                                     <button type="submit" class="btn btn-success btn-sm">Ativar</button>
                                 </form>
                             </div>
