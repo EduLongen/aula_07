@@ -6,19 +6,23 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * DTO de resposta do login na API REST (JWT).
+ * DTO de resposta do login e do refresh na API REST.
  *
- * Retorna o token JWT e informações básicas do usuário:
+ * Retorna o access token JWT, o refresh token e informações básicas do usuário:
  * {
  *   "token": "eyJhbGciOiJIUzI1NiJ9...",
+ *   "refreshToken": "550e8400-e29b-41d4-a716-446655440000",
  *   "tipo": "Bearer",
  *   "email": "admin@clienthub.com",
  *   "nome": "Administrador",
  *   "role": "ADMIN"
  * }
  *
- * O campo "tipo" é sempre "Bearer" — indica ao cliente como
- * enviar o token no header: Authorization: Bearer <token>
+ * - token:        JWT de curta duração, usado no header Authorization
+ * - refreshToken: UUID opaco de longa duração, usado APENAS em /api/auth/refresh
+ *                 para obter um novo par de tokens
+ * - tipo:         sempre "Bearer" — indica como enviar o token:
+ *                 Authorization: Bearer <token>
  */
 @Data
 @NoArgsConstructor
@@ -27,6 +31,8 @@ import lombok.NoArgsConstructor;
 public class LoginResponseDTO {
 
     private String token;
+
+    private String refreshToken;
 
     @Builder.Default
     private String tipo = "Bearer";

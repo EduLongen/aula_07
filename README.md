@@ -129,11 +129,15 @@ A aplicação cria automaticamente os seguintes usuários na primeira execução
    - **GESTOR/USUARIO** → redireciona para `/empresas/{id}` (detalhes da sua empresa)
 4. Sessão expira após inatividade (configurável em `application.properties`)
 
-### Autenticação da API REST (JWT)
+### Autenticação da API REST (JWT + Refresh Token)
 
-A API REST (`/api/**`) é protegida com **JSON Web Token (JWT)**. O frontend web continua usando sessão/cookie normalmente.
+A API REST (`/api/**`) é protegida com **JSON Web Token (JWT)** e suporta **refresh tokens** para renovação sem novo login. O frontend web continua usando sessão/cookie normalmente.
 
-**1. Obter o token:**
+A API emite dois tokens no login:
+- **access token** (JWT): curta duração (24h), stateless, usado no header de cada requisição
+- **refresh token** (UUID opaco): longa duração (7 dias), armazenado no banco, usado apenas em `/api/auth/refresh`
+
+**1. Obter os tokens (login):**
 ```bash
 curl -X POST http://localhost:8080/api/auth/login \
   -H "Content-Type: application/json" \
@@ -144,6 +148,7 @@ Resposta:
 ```json
 {
   "token": "eyJhbGciOiJIUzI1NiJ9...",
+  "refreshToken": "550e8400-e29b-41d4-a716-446655440000",
   "tipo": "Bearer",
   "email": "admin@clienthub.com",
   "nome": "Administrador",
@@ -151,21 +156,45 @@ Resposta:
 }
 ```
 
-**2. Usar o token nas requisições:**
+**2. Usar o access token nas requisições:**
 ```bash
 curl http://localhost:8080/api/empresas \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
 ```
 
-**3. No Swagger UI**, clique em "Authorize" e insira: `Bearer <seu_token>`
+**3. Renovar o access token (quando expirar):**
+```bash
+curl -X POST http://localhost:8080/api/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken": "550e8400-e29b-41d4-a716-446655440000"}'
+```
+
+Retorna um novo par (access + refresh). O refresh token anterior é **revogado** (rotação).
+
+**4. Logout (revogar o refresh token):**
+```bash
+curl -X POST http://localhost:8080/api/auth/logout \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken": "550e8400-e29b-41d4-a716-446655440000"}'
+```
+
+**5. No Swagger UI**, clique em "Authorize" e insira: `Bearer <seu_access_token>`
+
+#### Segurança: Rotação e Detecção de Reuso
+
+- **Rotação:** a cada uso, o refresh token é revogado e um novo é emitido no seu lugar
+- **Detecção de reuso:** se um refresh token já revogado for reapresentado (indício de roubo), **todos os refresh tokens ativos** do usuário são revogados automaticamente, forçando novo login
+- **Limpeza:** um job agendado remove periodicamente tokens expirados do banco (ver `jwt.refresh-cleanup-interval`)
 
 | Aspecto | Web (Thymeleaf) | API REST |
 |---------|:---------------:|:--------:|
-| Autenticação | Sessão (cookie) | JWT (header) |
+| Autenticação | Sessão (cookie) | JWT (access) + Refresh Token |
 | Login | Form `/login` | POST `/api/auth/login` |
-| Estado | Stateful (servidor guarda sessão) | Stateless (token auto-contido) |
+| Logout | `/logout` (invalida sessão) | POST `/api/auth/logout` (revoga refresh) |
+| Estado | Stateful (servidor guarda sessão) | Access stateless + Refresh no banco |
 | CSRF | Habilitado | Desabilitado |
-| Expiração | Configurável (session timeout) | 24 horas (jwt.expiration) |
+| Expiração access | — | 24h (`jwt.expiration`) |
+| Expiração refresh | — | 7 dias (`jwt.refresh-expiration`) |
 
 ## Estrutura do Projeto
 
@@ -186,6 +215,7 @@ com.saas.clienthub/
 │   │   ├── Empresa.java
 │   │   ├── Cliente.java
 │   │   ├── Usuario.java                    # Usuário com role e empresa
+│   │   ├── RefreshToken.java               # Refresh token (UUID) armazenado no banco
 │   │   ├── Plano.java                      # Enum: BASICO, PROFISSIONAL, ENTERPRISE
 │   │   └── Role.java                       # Enum: ADMIN, GESTOR, USUARIO
 │   └── dto/                                # DTOs de request/response
@@ -193,22 +223,26 @@ com.saas.clienthub/
 │       ├── ClienteRequestDTO / ResponseDTO
 │       ├── UsuarioRequestDTO / ResponseDTO
 │       ├── LoginRequestDTO / ResponseDTO   # DTOs para autenticação JWT
+│       ├── RefreshTokenRequestDTO          # DTO para refresh e logout
 │       ├── DashboardDTO
 │       ├── EnderecoViaCepDTO
 │       └── ErrorResponse
 ├── repository/                             # Spring Data JPA repositories
 │   ├── EmpresaRepository.java
 │   ├── ClienteRepository.java
-│   └── UsuarioRepository.java
+│   ├── UsuarioRepository.java
+│   └── RefreshTokenRepository.java
 ├── service/                                # Lógica de negócio
 │   ├── EmpresaService.java                 # + verificação de tenant
 │   ├── ClienteService.java                 # + verificação de tenant
 │   ├── UsuarioService.java                 # CRUD + getUsuarioLogado()
+│   ├── RefreshTokenService.java            # Rotação + detecção de reuso
+│   ├── RefreshTokenCleanupService.java     # Job @Scheduled de limpeza
 │   ├── CustomUserDetailsService.java       # Integração Spring Security
 │   └── ViaCepService.java
 ├── controller/
 │   ├── rest/                               # API REST (JSON) — Swagger
-│   │   ├── AuthRestController.java         # Login JWT (POST /api/auth/login)
+│   │   ├── AuthRestController.java         # Login, refresh e logout da API
 │   │   ├── EmpresaRestController.java
 │   │   ├── ClienteRestController.java
 │   │   ├── UsuarioRestController.java
@@ -231,7 +265,9 @@ com.saas.clienthub/
 
 | Método | Endpoint | Descrição |
 |--------|----------|-----------|
-| POST | /api/auth/login | Login — retorna token JWT |
+| POST | /api/auth/login | Login — retorna access token JWT + refresh token |
+| POST | /api/auth/refresh | Renovar access token usando o refresh token (rotação) |
+| POST | /api/auth/logout | Revogar o refresh token (access token continua válido até expirar) |
 
 ### Empresas
 
@@ -270,7 +306,7 @@ com.saas.clienthub/
 |--------|----------|-----------|
 | GET | /api/cep/{cep} | Consultar endereço por CEP |
 
-> **Nota:** O endpoint `POST /api/auth/login` é público. Todos os demais endpoints da API exigem token JWT válido no header `Authorization: Bearer <token>`.
+> **Nota:** Os endpoints sob `/api/auth/**` (login, refresh, logout) são públicos. Todos os demais endpoints da API exigem access token JWT válido no header `Authorization: Bearer <token>`.
 
 ## Dados de Exemplo
 
