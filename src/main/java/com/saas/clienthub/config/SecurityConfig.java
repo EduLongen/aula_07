@@ -97,7 +97,8 @@ public class SecurityConfig {
             // Regras de autorização para a API
             .authorizeHttpRequests(auth -> auth
                 // Login JWT é público (precisa estar acessível sem token)
-                .requestMatchers("/api/auth/**").permitAll()
+                // /api/cep/** é um BFF público consumido pela UI web (fetch sem Bearer)
+                .requestMatchers("/api/auth/**", "/api/cep/**").permitAll()
 
                 // OpenAPI JSON endpoint — precisa estar acessível para o Swagger UI funcionar
                 .requestMatchers("/api-docs/**").permitAll()
