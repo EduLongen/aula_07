@@ -1,6 +1,8 @@
 package com.saas.clienthub.repository;
 
 import com.saas.clienthub.model.entity.Empresa;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -48,6 +50,12 @@ public interface EmpresaRepository extends JpaRepository<Empresa, Long> {
 
     /** Retorna apenas empresas ativas (ativa = true) */
     List<Empresa> findByAtivaTrue();
+
+    /** Paginação — lista todas empresas ordenadas e paginadas */
+    Page<Empresa> findAll(Pageable pageable);
+
+    /** Paginação — apenas empresas ativas */
+    Page<Empresa> findByAtivaTrue(Pageable pageable);
 
     /**
      * Busca empresa pelo CNPJ.

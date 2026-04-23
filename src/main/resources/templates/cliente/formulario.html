@@ -73,6 +73,19 @@
                     </div>
                 </div>
 
+                <!-- Seção de Tags -->
+                <div th:if="${tagsDisponiveis != null and !#lists.isEmpty(tagsDisponiveis)}" class="form-group form-full" style="margin-top: 8px;">
+                    <label>Tags</label>
+                    <div class="tag-checkbox-group">
+                        <label th:each="tag : ${tagsDisponiveis}" class="tag-checkbox-item">
+                            <input type="checkbox" name="tagIds"
+                                   th:value="${tag.id}"
+                                   th:checked="${cliente.tagIds != null and #sets.contains(cliente.tagIds, tag.id)}">
+                            <span class="tag-badge" th:style="'background-color:' + ${tag.cor}" th:text="${tag.nome}">Tag</span>
+                        </label>
+                    </div>
+                </div>
+
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Salvar</button>
                     <a th:href="@{/empresas/{id}(id=${empresa.id})}" class="btn btn-secondary">Cancelar</a>

@@ -23,7 +23,7 @@
         </div>
 
         <form th:action="@{/empresas/{id}/clientes(id=${empresa.id})}" method="get" class="search-bar">
-            <input type="text" name="nome" placeholder="Pesquisar por nome..." th:value="${param.nome}">
+            <input type="text" name="nome" placeholder="Pesquisar por nome..." th:value="${nomePesquisa}">
             <button type="submit" class="btn btn-primary">Pesquisar</button>
         </form>
 
@@ -40,6 +40,7 @@
                         <th>Email</th>
                         <th>Telefone</th>
                         <th>Cidade/UF</th>
+                        <th>Tags</th>
                         <th>Status</th>
                         <th>Ações</th>
                     </tr>
@@ -50,6 +51,15 @@
                         <td th:text="${cliente.email}">email@example.com</td>
                         <td th:text="${cliente.telefone ?: '-'}">Telefone</td>
                         <td th:text="${cliente.cidade != null ? cliente.cidade + '/' + cliente.uf : '-'}">Cidade/UF</td>
+                        <td>
+                            <span th:if="${#lists.isEmpty(cliente.tags)}" class="text-muted">-</span>
+                            <div th:if="${!#lists.isEmpty(cliente.tags)}" class="tag-list">
+                                <span th:each="tag : ${cliente.tags}"
+                                      class="tag-badge"
+                                      th:style="'background-color:' + ${tag.cor}"
+                                      th:text="${tag.nome}">VIP</span>
+                            </div>
+                        </td>
                         <td>
                             <span class="badge"
                                   th:classappend="${cliente.ativo} ? 'badge-ativo' : 'badge-inativo'"
@@ -69,6 +79,11 @@
                     </tr>
                 </tbody>
             </table>
+
+            <!-- Barra de paginação -->
+            <div th:with="extraParams=${nomePesquisa != null and !#strings.isEmpty(nomePesquisa)} ? ('&nome=' + ${nomePesquisa}) : ''">
+                <div th:replace="~{fragments/paginacao :: paginacao(page=${clientesPage}, baseUrl='/empresas/' + ${empresa.id} + '/clientes', extraParams=${extraParams})}"></div>
+            </div>
         </div>
     </main>
 </div>

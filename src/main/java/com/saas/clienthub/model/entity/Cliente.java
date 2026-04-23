@@ -7,6 +7,8 @@ import jakarta.validation.constraints.Size;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Entidade JPA que representa um Cliente dentro de uma Empresa (tenant).
@@ -93,6 +95,33 @@ public class Cliente {
     @JoinColumn(name = "empresa_id", nullable = false)
     @ToString.Exclude
     private Empresa empresa;
+
+    /**
+     * Relacionamento Muitos-para-Muitos com Tag.
+     *
+     * Usamos Set (não List) para evitar duplicatas — uma tag nunca deve
+     * aparecer duas vezes no mesmo cliente.
+     *
+     * @JoinTable cria a tabela de junção "cliente_tags" com duas FKs:
+     *   - cliente_id → referencia clientes.id
+     *   - tag_id     → referencia tags.id
+     *
+     * Relacionamento UNIDIRECIONAL — apenas Cliente conhece suas tags.
+     * A classe Tag não tem referência de volta para Cliente, mantendo-a simples.
+     *
+     * @ToString.Exclude e @EqualsAndHashCode.Exclude evitam loops e queries
+     * desnecessárias ao chamar toString()/equals() em Cliente.
+     */
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "cliente_tags",
+            joinColumns = @JoinColumn(name = "cliente_id"),
+            inverseJoinColumns = @JoinColumn(name = "tag_id")
+    )
+    @Builder.Default
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private Set<Tag> tags = new HashSet<>();
 
     /** Executado automaticamente pelo JPA antes do primeiro INSERT */
     @PrePersist

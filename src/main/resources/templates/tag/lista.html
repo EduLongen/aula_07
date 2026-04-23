@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <meta charset="UTF-8">
+    <title>Tags — ClientHub</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<div class="app-container">
+    <div th:replace="~{fragments/navbar :: navbar}"></div>
+    <main class="main-content">
+        <div th:replace="~{fragments/messages :: messages}"></div>
+
+        <div class="page-header">
+            <h1>Tags — <span th:text="${empresa.nome}">Empresa</span></h1>
+            <div class="btn-group">
+                <a th:href="@{/empresas/{id}/tags/novo(id=${empresa.id})}" class="btn btn-primary">+ Nova Tag</a>
+                <a th:href="@{/empresas/{id}(id=${empresa.id})}" class="btn btn-secondary">Voltar</a>
+            </div>
+        </div>
+
+        <div th:if="${#lists.isEmpty(tags)}" class="empty-state">
+            <div class="empty-icon">🏷️</div>
+            <p>Nenhuma tag cadastrada nesta empresa</p>
+        </div>
+
+        <div th:if="${!#lists.isEmpty(tags)}" class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tag</th>
+                        <th>Cor</th>
+                        <th>Status</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="tag : ${tags}">
+                        <td>
+                            <span class="tag-badge"
+                                  th:style="'background-color:' + ${tag.cor}"
+                                  th:text="${tag.nome}">Tag</span>
+                        </td>
+                        <td>
+                            <code th:text="${tag.cor}">#007AFF</code>
+                        </td>
+                        <td>
+                            <span class="badge"
+                                  th:classappend="${tag.ativo} ? 'badge-ativo' : 'badge-inativo'"
+                                  th:text="${tag.ativo} ? 'Ativa' : 'Inativa'">Ativa</span>
+                        </td>
+                        <td>
+                            <div class="btn-group">
+                                <a th:href="@{/empresas/{eid}/tags/{tid}/editar(eid=${empresa.id},tid=${tag.id})}" class="btn btn-secondary btn-sm">Editar</a>
+                                <form th:if="${tag.ativo}" th:action="@{/empresas/{eid}/tags/{tid}/desativar(eid=${empresa.id},tid=${tag.id})}" method="post" class="form-desativar">
+                                    <button type="submit" class="btn btn-danger btn-sm">Desativar</button>
+                                </form>
+                                <form th:if="${!tag.ativo}" th:action="@{/empresas/{eid}/tags/{tid}/ativar(eid=${empresa.id},tid=${tag.id})}" method="post">
+                                    <button type="submit" class="btn btn-success btn-sm">Ativar</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Barra de paginação -->
+            <div th:replace="~{fragments/paginacao :: paginacao(page=${tagsPage}, baseUrl='/empresas/' + ${empresa.id} + '/tags', extraParams='')}"></div>
+        </div>
+    </main>
+</div>
+
+<div class="modal-overlay" id="modal-confirmacao">
+    <div class="modal-content">
+        <h3>Confirmar ação</h3>
+        <p>Tem certeza que deseja desativar esta tag?</p>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" id="modal-cancelar">Cancelar</button>
+            <button class="btn btn-danger" id="modal-confirmar">Desativar</button>
+        </div>
+    </div>
+</div>
+<script th:src="@{/js/app.js}"></script>
+</body>
+</html>

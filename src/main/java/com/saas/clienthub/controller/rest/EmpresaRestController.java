@@ -6,12 +6,15 @@ import com.saas.clienthub.service.EmpresaService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
-import java.util.List;
 
 /**
  * Controller REST para operações de Empresa via API JSON.
@@ -56,13 +59,18 @@ public class EmpresaRestController {
     }
 
     /**
-     * GET /api/empresas → lista todas as empresas.
-     * ResponseEntity.ok() retorna HTTP 200 com o JSON no body.
+     * GET /api/empresas?page=0&size=10&sort=nome → lista paginada.
+     * Retorna Page<EmpresaResponseDTO> — inclui conteúdo + totalElements/totalPages.
      */
     @GetMapping
-    @Operation(summary = "Listar empresas", description = "Retorna todas as empresas cadastradas")
-    public ResponseEntity<List<EmpresaResponseDTO>> listar() {
-        return ResponseEntity.ok(empresaService.listarTodas());
+    @Operation(summary = "Listar empresas paginadas",
+               description = "Retorna empresas com paginação e ordenação")
+    public ResponseEntity<Page<EmpresaResponseDTO>> listar(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "nome") String sort) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(sort));
+        return ResponseEntity.ok(empresaService.listarTodas(pageable));
     }
 
     /**

@@ -5,42 +5,37 @@ import com.saas.clienthub.model.dto.ClienteResponseDTO;
 import com.saas.clienthub.model.entity.Usuario;
 import com.saas.clienthub.service.ClienteService;
 import com.saas.clienthub.service.EmpresaService;
+import com.saas.clienthub.service.TagService;
 import com.saas.clienthub.service.UsuarioService;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import java.util.HashSet;
+import java.util.stream.Collectors;
+
 /**
- * Controller Web para as páginas HTML de Cliente (renderizadas pelo Thymeleaf).
+ * Controller Web para as páginas HTML de Cliente.
  *
  * =====================================================================
- * CONCEITO: URLs com Múltiplas Variáveis de Path
+ * CONCEITO: Paginação no formulário web
  * =====================================================================
- * A URL base é: /empresas/{empresaId}/clientes
- *
- * O empresaId está na URL por dois motivos:
- * 1. Contexto visual: o usuário sabe em qual empresa está navegando
- * 2. Segurança: toda operação de cliente exige o empresaId,
- *    garantindo o isolamento multi-tenant também nas páginas web
+ * A listagem recebe page/size via @RequestParam e passa o Page para o template.
+ * O template usa totalPages e currentPage para renderizar a barra de paginação.
  *
  * =====================================================================
- * CONCEITO: Reutilização de Templates
+ * CONCEITO: Tags no formulário de cliente
  * =====================================================================
- * O formulário de criação e edição usam o MESMO template (cliente/formulario.html).
- * A distinção entre criar/editar é feita pelo campo hidden "id" no formulário:
- *   - id = null → criação (POST /salvar)
- *   - id = 42   → edição (POST /salvar com id preenchido → service chama atualizar)
- *
- * =====================================================================
- * CONCEITO: Por que o /salvar verifica dto.getId()?
- * =====================================================================
- * Como usamos o mesmo endpoint POST /salvar para criar E editar,
- * o controller decide qual operação executar baseado no ID:
- *   - dto.getId() == null → clienteService.criar(empresaId, dto)
- *   - dto.getId() != null → clienteService.atualizar(empresaId, dto.getId(), dto)
+ * Ao abrir o formulário (novo ou editar), carregamos as tags ATIVAS da empresa
+ * para renderizar os checkboxes. Na edição, preenchemos dto.tagIds com os IDs
+ * das tags que o cliente já tem — o Thymeleaf marca os checkboxes correspondentes.
  */
 @Controller
 @RequestMapping("/empresas/{empresaId}/clientes")
@@ -48,116 +43,127 @@ public class ClienteWebController {
 
     private final ClienteService clienteService;
     private final EmpresaService empresaService;
+    private final TagService tagService;
     private final UsuarioService usuarioService;
 
     public ClienteWebController(ClienteService clienteService,
                                 EmpresaService empresaService,
+                                TagService tagService,
                                 UsuarioService usuarioService) {
         this.clienteService = clienteService;
         this.empresaService = empresaService;
+        this.tagService = tagService;
         this.usuarioService = usuarioService;
     }
 
-    /** Garante que todos os templates desta classe saibam que estamos na seção "empresas" */
     @ModelAttribute("currentPage")
     public String currentPage() {
         return "empresas";
     }
 
-    /** Adiciona o usuário logado ao model para exibir na navbar */
     @ModelAttribute("usuario")
     public Usuario usuarioLogado() {
         return usuarioService.getUsuarioLogado();
     }
 
     /**
-     * GET /empresas/{empresaId}/clientes → lista clientes da empresa.
-     * Passa tanto a lista de clientes quanto os dados da empresa para o template.
+     * GET /empresas/{empresaId}/clientes?page=0&size=10
+     * Renderiza a lista paginada e passa os metadados de paginação para o template.
      */
     @GetMapping
-    public String listar(@PathVariable Long empresaId, Model model) {
-        model.addAttribute("clientes", clienteService.listarPorEmpresa(empresaId));
-        model.addAttribute("empresa", empresaService.buscarPorId(empresaId)); // para exibir nome da empresa
+    public String listar(@PathVariable Long empresaId,
+                         @RequestParam(defaultValue = "0") int page,
+                         @RequestParam(defaultValue = "5") int size,
+                         @RequestParam(required = false) String nome,
+                         Model model) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("nome"));
+
+        // Se veio "nome" do campo de pesquisa, usa o método de pesquisa paginada
+        Page<ClienteResponseDTO> clientesPage = (nome != null && !nome.isBlank())
+                ? clienteService.pesquisarPorNome(empresaId, nome, pageable)
+                : clienteService.listarPorEmpresa(empresaId, pageable);
+
+        model.addAttribute("clientesPage", clientesPage);
+        model.addAttribute("clientes", clientesPage.getContent());
+        model.addAttribute("currentPage", page);
+        model.addAttribute("totalPages", clientesPage.getTotalPages());
+        model.addAttribute("totalItems", clientesPage.getTotalElements());
+        model.addAttribute("empresa", empresaService.buscarPorId(empresaId));
+        model.addAttribute("nomePesquisa", nome);
         return "cliente/lista";
     }
 
-    /** GET /empresas/{empresaId}/clientes/novo → exibe formulário de novo cliente */
+    /** GET /empresas/{empresaId}/clientes/novo — formulário de novo cliente com lista de tags */
     @GetMapping("/novo")
     public String novo(@PathVariable Long empresaId, Model model) {
-        model.addAttribute("cliente", new ClienteRequestDTO()); // DTO vazio para o form
+        model.addAttribute("cliente", new ClienteRequestDTO());
         model.addAttribute("empresa", empresaService.buscarPorId(empresaId));
+        model.addAttribute("tagsDisponiveis", tagService.listarAtivasPorEmpresa(empresaId));
         return "cliente/formulario";
     }
 
-    /**
-     * POST /empresas/{empresaId}/clientes/salvar → processa criação ou edição.
-     *
-     * Nota: empresaId vem do @PathVariable da URL, não do formulário.
-     * Isso evita que um usuário malicioso altere o empresaId no HTML
-     * e consiga salvar um cliente em outra empresa.
-     */
+    /** POST /empresas/{empresaId}/clientes/salvar — cria ou edita */
     @PostMapping("/salvar")
     public String salvar(@PathVariable Long empresaId,
                          @Valid @ModelAttribute("cliente") ClienteRequestDTO dto,
                          BindingResult result, Model model, RedirectAttributes redirectAttributes) {
-        // Erros de validação → volta para o formulário com mensagens de erro
         if (result.hasErrors()) {
             model.addAttribute("empresa", empresaService.buscarPorId(empresaId));
+            model.addAttribute("tagsDisponiveis", tagService.listarAtivasPorEmpresa(empresaId));
             return "cliente/formulario";
         }
 
         try {
             if (dto.getId() != null) {
-                clienteService.atualizar(empresaId, dto.getId(), dto); // edição
+                clienteService.atualizar(empresaId, dto.getId(), dto);
             } else {
-                clienteService.criar(empresaId, dto); // criação
+                clienteService.criar(empresaId, dto);
             }
             redirectAttributes.addFlashAttribute("mensagemSucesso", "Cliente salvo com sucesso!");
         } catch (Exception e) {
             redirectAttributes.addFlashAttribute("mensagemErro", e.getMessage());
         }
 
-        // Redireciona para a página de detalhes da empresa (PRG Pattern)
         return "redirect:/empresas/" + empresaId;
     }
 
-    /**
-     * GET /empresas/{empresaId}/clientes/{id}/editar → formulário preenchido para edição.
-     * Converte o ResponseDTO para um RequestDTO (que tem o campo id para indicar edição).
-     */
+    /** GET /empresas/{empresaId}/clientes/{id}/editar — preenche dto + pré-marca checkboxes */
     @GetMapping("/{id}/editar")
     public String editar(@PathVariable Long empresaId, @PathVariable Long id, Model model) {
         ClienteResponseDTO cliente = clienteService.buscarPorId(empresaId, id);
 
-        // Converte Response → Request DTO para usar no formulário de edição
         ClienteRequestDTO dto = ClienteRequestDTO.builder()
-                .id(cliente.getId())         // ID incluído → indica edição no /salvar
+                .id(cliente.getId())
                 .nome(cliente.getNome())
                 .email(cliente.getEmail())
                 .telefone(cliente.getTelefone())
                 .cep(cliente.getCep())
+                // IDs das tags atuais — o Thymeleaf marca os checkboxes correspondentes
+                .tagIds(cliente.getTags() == null ? new HashSet<>()
+                        : cliente.getTags().stream()
+                            .map(t -> t.getId())
+                            .collect(Collectors.toSet()))
                 .build();
 
         model.addAttribute("cliente", dto);
         model.addAttribute("empresa", empresaService.buscarPorId(empresaId));
-        return "cliente/formulario"; // reutiliza o mesmo template
+        model.addAttribute("tagsDisponiveis", tagService.listarAtivasPorEmpresa(empresaId));
+        return "cliente/formulario";
     }
 
-    /** POST /empresas/{empresaId}/clientes/{id}/desativar → soft delete do cliente */
     @PostMapping("/{id}/desativar")
     public String desativar(@PathVariable Long empresaId, @PathVariable Long id,
                             RedirectAttributes redirectAttributes) {
         clienteService.desativar(empresaId, id);
         redirectAttributes.addFlashAttribute("mensagemSucesso", "Cliente desativado com sucesso!");
-        return "redirect:/empresas/" + empresaId; // PRG
+        return "redirect:/empresas/" + empresaId;
     }
 
-    /** POST /empresas/{empresaId}/clientes/{id}/ativar → reativa cliente desativado */
     @PostMapping("/{id}/ativar")
     public String ativar(@PathVariable Long empresaId, @PathVariable Long id,
                          RedirectAttributes redirectAttributes) {
         clienteService.ativar(empresaId, id);
         redirectAttributes.addFlashAttribute("mensagemSucesso", "Cliente ativado com sucesso!");
-        return "redirect:/empresas/" + empresaId; // PRG
+        return "redirect:/empresas/" + empresaId;
     }
 }

@@ -9,6 +9,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.HashSet;
+import java.util.Set;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -29,4 +32,12 @@ public class ClienteRequestDTO {
 
     @Pattern(regexp = "\\d{8}", message = "CEP deve conter 8 dígitos")
     private String cep;
+
+    /**
+     * IDs das tags que o cliente terá.
+     * Enviado pelo frontend como múltiplos checkboxes (formulário web) ou array JSON (API).
+     * Spring converte ambos em Set<Long> automaticamente.
+     */
+    @Builder.Default
+    private Set<Long> tagIds = new HashSet<>();
 }

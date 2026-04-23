@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Fragment de paginação reutilizável.
+  Uso: <div th:replace="~{fragments/paginacao :: paginacao(page=${clientesPage}, baseUrl='/empresas/1/clientes', extraParams='&nome=foo')}"></div>
+
+  Parâmetros:
+    - page: objeto Page<T> retornado pelo service
+    - baseUrl: URL base sem query string (ex: /empresas/1/clientes)
+    - extraParams: query params adicionais já com & na frente (ex: "&nome=ana") — opcional
+-->
+<div th:fragment="paginacao(page, baseUrl, extraParams)"
+     th:if="${page != null and page.totalPages > 1}"
+     class="pagination">
+
+    <!-- Botão "Anterior" -->
+    <a th:if="${!page.first}"
+       th:href="@{${baseUrl}(page=${page.number - 1}, size=${page.size})} + ${extraParams != null ? extraParams : ''}"
+       class="pagination-btn">← Anterior</a>
+    <span th:if="${page.first}" class="pagination-btn pagination-disabled">← Anterior</span>
+
+    <!-- Números das páginas -->
+    <a th:each="i : ${#numbers.sequence(0, page.totalPages - 1)}"
+       th:href="@{${baseUrl}(page=${i}, size=${page.size})} + ${extraParams != null ? extraParams : ''}"
+       th:text="${i + 1}"
+       th:classappend="${i == page.number} ? 'pagination-active' : ''"
+       class="pagination-btn">1</a>
+
+    <!-- Botão "Próximo" -->
+    <a th:if="${!page.last}"
+       th:href="@{${baseUrl}(page=${page.number + 1}, size=${page.size})} + ${extraParams != null ? extraParams : ''}"
+       class="pagination-btn">Próximo →</a>
+    <span th:if="${page.last}" class="pagination-btn pagination-disabled">Próximo →</span>
+
+    <!-- Info "Mostrando X-Y de Z resultados" -->
+    <span class="pagination-info"
+          th:with="inicio=${page.number * page.size + 1},
+                   fim=${page.number * page.size + page.numberOfElements}"
+          th:text="'Mostrando ' + ${inicio} + '-' + ${fim} + ' de ' + ${page.totalElements} + ' resultados'">
+    </span>
+</div>
+</body>
+</html>

@@ -756,6 +756,112 @@ tbody tr:hover {
     padding: 2px 8px;
 }
 
+/* === Tag Badges === */
+.tag-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: white;
+}
+
+.tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.text-muted {
+    color: var(--color-text-secondary);
+}
+
+/* === Tag Checkboxes === */
+.tag-checkbox-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.tag-checkbox-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-weight: 400;
+}
+
+.tag-checkbox-item input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--color-primary);
+    cursor: pointer;
+}
+
+/* === Color Picker === */
+.color-picker-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.color-input {
+    width: 50px;
+    height: 40px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    padding: 2px;
+}
+
+/* === Pagination === */
+.pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 16px;
+    border-top: 1px solid var(--color-border);
+    flex-wrap: wrap;
+}
+
+.pagination-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    height: 36px;
+    padding: 4px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--color-text);
+    transition: all 0.2s ease;
+}
+
+.pagination-btn:hover:not(.pagination-disabled):not(.pagination-active) {
+    background: var(--color-hover-bg);
+}
+
+.pagination-active {
+    background: var(--color-primary);
+    color: white;
+}
+
+.pagination-disabled {
+    color: var(--color-text-secondary);
+    opacity: 0.5;
+    cursor: default;
+}
+
+.pagination-info {
+    color: var(--color-text-secondary);
+    font-size: 0.85rem;
+    margin-left: 16px;
+}
+
 /* === Responsividade === */
 @media (max-width: 768px) {
     .app-container {

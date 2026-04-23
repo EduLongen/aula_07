@@ -5,147 +5,161 @@ import com.saas.clienthub.exception.ResourceNotFoundException;
 import com.saas.clienthub.model.dto.ClienteRequestDTO;
 import com.saas.clienthub.model.dto.ClienteResponseDTO;
 import com.saas.clienthub.model.dto.EnderecoViaCepDTO;
+import com.saas.clienthub.model.dto.TagResponseDTO;
 import com.saas.clienthub.model.entity.Cliente;
 import com.saas.clienthub.model.entity.Empresa;
 import com.saas.clienthub.model.entity.Role;
+import com.saas.clienthub.model.entity.Tag;
 import com.saas.clienthub.model.entity.Usuario;
 import com.saas.clienthub.repository.ClienteRepository;
 import com.saas.clienthub.repository.EmpresaRepository;
+import com.saas.clienthub.repository.TagRepository;
 import com.saas.clienthub.repository.UsuarioRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Service com toda a lógica de negócio relacionada aos Clientes.
  *
  * =====================================================================
- * CONCEITO: Logger / SLF4J
+ * CONCEITO: Paginação
  * =====================================================================
- * SLF4J (Simple Logging Facade for Java) é uma abstração de logging.
- * Usamos Logger para registrar mensagens de diagnóstico na aplicação:
+ * Métodos de listagem recebem Pageable e retornam Page<ClienteResponseDTO>.
+ * O Pageable encapsula page, size e sort. Page contém os dados da página
+ * + metadados (totalElements, totalPages, etc).
  *
- * log.info()  → informação importante (ex: "Dados carregados: X registros")
- * log.warn()  → algo inesperado mas não crítico (ex: "CEP não encontrado")
- * log.error() → erro que impactou o usuário
- * log.debug() → detalhes para desenvolvimento (não aparecem em produção)
- *
- * O Logback (implementação padrão do Spring Boot) escreve os logs no console
- * e pode ser configurado para salvar em arquivo, enviar para serviço externo, etc.
+ * =====================================================================
+ * CONCEITO: Associação de Tags (ManyToMany)
+ * =====================================================================
+ * Ao criar/atualizar cliente, recebemos um Set<Long> de tagIds.
+ * Buscamos as tags via findByIdInAndEmpresaId — que garante que TODAS
+ * pertencem à mesma empresa (anti-IDOR). Se alguma tag não for encontrada,
+ * lançamos BusinessException (cliente envia ID inválido ou de outra empresa).
  */
 @Service
 public class ClienteService {
 
-    // Cria um logger específico para esta classe — aparece nos logs como "[ClienteService]"
     private static final Logger log = LoggerFactory.getLogger(ClienteService.class);
 
     private final ClienteRepository clienteRepository;
     private final EmpresaRepository empresaRepository;
     private final UsuarioRepository usuarioRepository;
-    private final ViaCepService viaCepService;  // Dependência para buscar endereço pelo CEP
+    private final TagRepository tagRepository;
+    private final ViaCepService viaCepService;
 
-    /** Injeção via construtor — Spring injeta todas as dependências automaticamente */
     public ClienteService(ClienteRepository clienteRepository,
                           EmpresaRepository empresaRepository,
                           UsuarioRepository usuarioRepository,
+                          TagRepository tagRepository,
                           ViaCepService viaCepService) {
         this.clienteRepository = clienteRepository;
         this.empresaRepository = empresaRepository;
         this.usuarioRepository = usuarioRepository;
+        this.tagRepository = tagRepository;
         this.viaCepService = viaCepService;
     }
 
     /**
-     * Lista todos os clientes de uma empresa específica.
-     * Sempre filtra por empresaId — nunca retorna clientes de outras empresas.
-     * Verifica se o usuário logado tem permissão para acessar esta empresa.
+     * Lista todos os clientes de uma empresa — sem paginação.
+     * Usa JOIN FETCH para carregar empresa + tags em uma única query (evita N+1).
+     * Mantido para usos internos (ex: detalhes da empresa).
      */
+    @Transactional(readOnly = true)
     public List<ClienteResponseDTO> listarPorEmpresa(Long empresaId) {
         verificarAcessoEmpresa(empresaId);
-        return clienteRepository.findByEmpresaId(empresaId).stream()
+        return clienteRepository.findByEmpresaIdWithTags(empresaId).stream()
                 .map(this::toResponseDTO)
                 .toList();
     }
 
     /**
-     * Busca um cliente garantindo que pertence à empresa informada.
-     * findByIdAndEmpresaId → WHERE id = ? AND empresa_id = ?
-     * Se o cliente existir mas for de outra empresa → retorna vazio → HTTP 404
+     * Listagem paginada — principal método usado nas telas de listagem.
+     * O Pageable controla page, size e ordenação (vem do controller via @RequestParam).
      */
+    @Transactional(readOnly = true)
+    public Page<ClienteResponseDTO> listarPorEmpresa(Long empresaId, Pageable pageable) {
+        verificarAcessoEmpresa(empresaId);
+        return clienteRepository.findByEmpresaId(empresaId, pageable)
+                .map(this::toResponseDTO);
+    }
+
+    /**
+     * Busca um cliente garantindo que pertence à empresa.
+     * Usa JOIN FETCH para já trazer as tags carregadas — evita LazyInitializationException
+     * ao mapear no toResponseDTO fora do contexto transacional.
+     */
+    @Transactional(readOnly = true)
     public ClienteResponseDTO buscarPorId(Long empresaId, Long clienteId) {
         verificarAcessoEmpresa(empresaId);
-        Cliente cliente = clienteRepository.findByIdAndEmpresaId(clienteId, empresaId)
+        Cliente cliente = clienteRepository.findByIdAndEmpresaIdWithTags(clienteId, empresaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cliente não encontrado com id: " + clienteId));
         return toResponseDTO(cliente);
     }
 
     /**
-     * Cria um novo cliente vinculado a uma empresa.
-     *
-     * Fluxo:
-     * 1. Valida que a empresa existe
-     * 2. Valida que o email não está duplicado nesta empresa
-     * 3. Converte DTO → Entidade
-     * 4. Tenta preencher endereço via CEP (sem falhar se der erro)
-     * 5. Salva no banco
-     * 6. Retorna DTO de resposta
+     * Cria um novo cliente na empresa, associando as tags informadas.
      */
     @Transactional
     public ClienteResponseDTO criar(Long empresaId, ClienteRequestDTO dto) {
         verificarAcessoEmpresa(empresaId);
-        // Garante que a empresa existe antes de criar o cliente
         Empresa empresa = empresaRepository.findById(empresaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Empresa não encontrada com id: " + empresaId));
 
-        // Regra de negócio: email único POR EMPRESA (multi-tenant)
-        // O mesmo email pode existir em empresas diferentes
         clienteRepository.findByEmailAndEmpresaId(dto.getEmail(), empresaId)
                 .ifPresent(c -> {
                     throw new BusinessException("Email já cadastrado nesta empresa: " + dto.getEmail());
                 });
 
         Cliente cliente = toEntity(dto, empresa);
-        preencherEndereco(cliente, dto.getCep()); // Busca endereço pelo CEP se informado
+        preencherEndereco(cliente, dto.getCep());
+        cliente.setTags(resolverTags(dto.getTagIds(), empresaId));
         cliente = clienteRepository.save(cliente);
         return toResponseDTO(cliente);
     }
 
     /**
-     * Atualiza os dados de um cliente existente.
-     * Valida email duplicado excluindo o próprio cliente da verificação.
+     * Atualiza dados do cliente + substitui o conjunto de tags.
+     * Se tagIds vier nulo/vazio → o cliente fica sem tags (limpa as existentes).
      */
     @Transactional
     public ClienteResponseDTO atualizar(Long empresaId, Long clienteId, ClienteRequestDTO dto) {
         verificarAcessoEmpresa(empresaId);
-        // Busca o cliente garantindo que pertence à empresa — proteção multi-tenant
-        Cliente cliente = clienteRepository.findByIdAndEmpresaId(clienteId, empresaId)
+        Cliente cliente = clienteRepository.findByIdAndEmpresaIdWithTags(clienteId, empresaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cliente não encontrado com id: " + clienteId));
 
-        // Verifica se o email pertence a OUTRO cliente desta empresa
         clienteRepository.findByEmailAndEmpresaId(dto.getEmail(), empresaId)
-                .filter(c -> !c.getId().equals(clienteId)) // ignora o próprio cliente
+                .filter(c -> !c.getId().equals(clienteId))
                 .ifPresent(c -> {
                     throw new BusinessException("Email já cadastrado nesta empresa: " + dto.getEmail());
                 });
 
-        // Atualiza os campos
         cliente.setNome(dto.getNome());
         cliente.setEmail(dto.getEmail());
         cliente.setTelefone(dto.getTelefone());
         cliente.setCep(dto.getCep());
-        preencherEndereco(cliente, dto.getCep()); // Atualiza o endereço se o CEP mudou
+        preencherEndereco(cliente, dto.getCep());
+
+        // Substitui o conjunto completo de tags — mais simples e seguro que diff manual
+        cliente.getTags().clear();
+        cliente.getTags().addAll(resolverTags(dto.getTagIds(), empresaId));
 
         cliente = clienteRepository.save(cliente);
         return toResponseDTO(cliente);
     }
 
-    /** Soft Delete: marca o cliente como inativo sem removê-lo do banco */
+    /** Soft Delete */
     @Transactional
     public void desativar(Long empresaId, Long clienteId) {
         verificarAcessoEmpresa(empresaId);
@@ -155,7 +169,7 @@ public class ClienteService {
         clienteRepository.save(cliente);
     }
 
-    /** Reativa um cliente previamente desativado */
+    /** Reativa cliente desativado */
     @Transactional
     public void ativar(Long empresaId, Long clienteId) {
         verificarAcessoEmpresa(empresaId);
@@ -165,7 +179,16 @@ public class ClienteService {
         clienteRepository.save(cliente);
     }
 
-    /** Pesquisa clientes por nome dentro de uma empresa (busca parcial, sem case) */
+    /** Pesquisa paginada por nome dentro de uma empresa */
+    @Transactional(readOnly = true)
+    public Page<ClienteResponseDTO> pesquisarPorNome(Long empresaId, String nome, Pageable pageable) {
+        verificarAcessoEmpresa(empresaId);
+        return clienteRepository.findByEmpresaIdAndNomeContainingIgnoreCase(empresaId, nome, pageable)
+                .map(this::toResponseDTO);
+    }
+
+    /** Versão sem paginação — mantida para API REST antiga que ainda retorna List */
+    @Transactional(readOnly = true)
     public List<ClienteResponseDTO> pesquisarPorNome(Long empresaId, String nome) {
         verificarAcessoEmpresa(empresaId);
         return clienteRepository.findByEmpresaIdAndNomeContainingIgnoreCase(empresaId, nome).stream()
@@ -174,37 +197,48 @@ public class ClienteService {
     }
 
     /**
-     * Tenta preencher os dados de endereço do cliente consultando a API ViaCEP.
-     *
-     * Decisão de design importante: usamos try-catch aqui para NÃO
-     * deixar que uma falha na API externa (ViaCEP) impeça o cadastro do cliente.
-     * Se o CEP não for encontrado, o cliente é salvo sem endereço — isso é aceitável.
-     * O erro é apenas logado como WARNING (não como ERROR, pois não é crítico).
+     * Resolve os IDs de tag em entidades, validando que TODAS pertencem à empresa.
+     * Se algum ID for inválido ou pertencer a outra empresa, lança BusinessException.
      */
+    private Set<Tag> resolverTags(Set<Long> tagIds, Long empresaId) {
+        if (tagIds == null || tagIds.isEmpty()) {
+            return new HashSet<>();
+        }
+        List<Tag> encontradas = tagRepository.findByIdInAndEmpresaId(tagIds, empresaId);
+        if (encontradas.size() != tagIds.size()) {
+            throw new BusinessException("Uma ou mais tags não foram encontradas ou não pertencem a esta empresa");
+        }
+        return new HashSet<>(encontradas);
+    }
+
     private void preencherEndereco(Cliente cliente, String cep) {
         if (cep != null && !cep.isBlank()) {
             try {
                 EnderecoViaCepDTO endereco = viaCepService.buscarCep(cep);
-                // Preenche os campos de endereço com os dados retornados pela API
                 cliente.setLogradouro(endereco.getLogradouro());
                 cliente.setBairro(endereco.getBairro());
-                cliente.setCidade(endereco.getLocalidade()); // ViaCEP usa "localidade" para cidade
+                cliente.setCidade(endereco.getLocalidade());
                 cliente.setUf(endereco.getUf());
             } catch (Exception e) {
-                // Falha na API ViaCEP não interrompe o cadastro — apenas loga o aviso
                 log.warn("Erro ao buscar CEP {}: {}", cep, e.getMessage());
             }
         }
     }
 
-    /**
-     * Converte a entidade Cliente para o DTO de resposta.
-     * Inclui dados da empresa (id e nome) sem expor a entidade Empresa completa.
-     *
-     * Nota: empresa.getId() e empresa.getNome() funcionam aqui porque
-     * a entidade Cliente foi carregada com a Empresa em contexto transacional.
-     */
     private ClienteResponseDTO toResponseDTO(Cliente entity) {
+        // Mapeia tags para DTOs — se null (cliente novo sem tags), usa lista vazia
+        List<TagResponseDTO> tagDtos = entity.getTags() == null
+                ? new ArrayList<>()
+                : entity.getTags().stream()
+                    .map(tag -> TagResponseDTO.builder()
+                            .id(tag.getId())
+                            .nome(tag.getNome())
+                            .cor(tag.getCor())
+                            .empresaId(entity.getEmpresa().getId())
+                            .ativo(tag.getAtivo())
+                            .build())
+                    .toList();
+
         return ClienteResponseDTO.builder()
                 .id(entity.getId())
                 .nome(entity.getNome())
@@ -217,30 +251,22 @@ public class ClienteService {
                 .uf(entity.getUf())
                 .ativo(entity.getAtivo())
                 .dataCadastro(entity.getDataCadastro())
-                .empresaId(entity.getEmpresa().getId())    // apenas o ID da empresa
-                .empresaNome(entity.getEmpresa().getNome()) // apenas o nome da empresa
+                .empresaId(entity.getEmpresa().getId())
+                .empresaNome(entity.getEmpresa().getNome())
+                .tags(tagDtos)
                 .build();
     }
 
-    /**
-     * Converte o DTO de requisição em entidade JPA.
-     * A Empresa é recebida como parâmetro (já validada e buscada do banco).
-     * Os campos de endereço são preenchidos depois via ViaCEP.
-     */
     private Cliente toEntity(ClienteRequestDTO dto, Empresa empresa) {
         return Cliente.builder()
                 .nome(dto.getNome())
                 .email(dto.getEmail())
                 .telefone(dto.getTelefone())
                 .cep(dto.getCep())
-                .empresa(empresa) // associa o cliente ao tenant correto
+                .empresa(empresa)
                 .build();
     }
 
-    /**
-     * Obtém o usuário logado a partir do SecurityContextHolder.
-     * Retorna null se não houver autenticação (ex: API pública sem login).
-     */
     private Usuario getUsuarioLogado() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated()
@@ -250,18 +276,11 @@ public class ClienteService {
         return usuarioRepository.findByEmail(auth.getName()).orElse(null);
     }
 
-    /**
-     * Verifica se o usuário logado tem permissão para acessar dados da empresa informada.
-     * ADMIN e requisições sem autenticação (API pública) podem acessar qualquer empresa.
-     * GESTOR/USUARIO só podem acessar a própria empresa.
-     */
     private void verificarAcessoEmpresa(Long empresaId) {
         Usuario usuarioLogado = getUsuarioLogado();
-        // Sem login (API pública) ou ADMIN → acesso total
         if (usuarioLogado == null || usuarioLogado.getRole() == Role.ADMIN) {
             return;
         }
-        // GESTOR/USUARIO → verifica se é a empresa do usuário
         if (usuarioLogado.getEmpresa() == null || !usuarioLogado.getEmpresa().getId().equals(empresaId)) {
             throw new AccessDeniedException("Acesso negado a esta empresa");
         }

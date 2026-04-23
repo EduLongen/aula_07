@@ -12,6 +12,9 @@ import com.saas.clienthub.model.entity.Usuario;
 import com.saas.clienthub.repository.ClienteRepository;
 import com.saas.clienthub.repository.EmpresaRepository;
 import com.saas.clienthub.repository.UsuarioRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -100,6 +103,27 @@ public class EmpresaService {
         }
 
         return List.of();
+    }
+
+    /**
+     * Listagem paginada de empresas (respeitando multi-tenancy).
+     * ADMIN → todas empresas paginadas.
+     * GESTOR/USUARIO → apenas a sua empresa (como única página com 1 item).
+     */
+    public Page<EmpresaResponseDTO> listarTodas(Pageable pageable) {
+        Usuario usuarioLogado = getUsuarioLogado();
+
+        if (usuarioLogado == null || usuarioLogado.getRole() == Role.ADMIN) {
+            return empresaRepository.findAll(pageable).map(this::toResponseDTO);
+        }
+
+        // Não-ADMIN → retorna apenas a própria empresa como Page simples
+        if (usuarioLogado.getEmpresa() != null) {
+            List<EmpresaResponseDTO> lista = List.of(toResponseDTO(usuarioLogado.getEmpresa()));
+            return new PageImpl<>(lista, pageable, lista.size());
+        }
+
+        return new PageImpl<>(List.of(), pageable, 0);
     }
 
     /** Retorna apenas empresas com ativa = true */

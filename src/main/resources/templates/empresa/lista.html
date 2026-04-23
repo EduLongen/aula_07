@@ -72,6 +72,9 @@
                     </tr>
                 </tbody>
             </table>
+
+            <!-- Barra de paginação -->
+            <div th:replace="~{fragments/paginacao :: paginacao(page=${empresasPage}, baseUrl='/empresas', extraParams='')}"></div>
         </div>
     </main>
 </div>

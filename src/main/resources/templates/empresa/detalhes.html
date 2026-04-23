@@ -61,6 +61,14 @@
         </div>
 
         <div class="page-header">
+            <h1>Gerenciamento</h1>
+            <div class="btn-group">
+                <a th:href="@{/empresas/{id}/clientes(id=${empresa.id})}" class="btn btn-primary">Clientes</a>
+                <a th:href="@{/empresas/{id}/tags(id=${empresa.id})}" class="btn btn-secondary">Gerenciar Tags</a>
+            </div>
+        </div>
+
+        <div class="page-header">
             <h1>Clientes</h1>
             <a th:href="@{/empresas/{id}/clientes/novo(id=${empresa.id})}" class="btn btn-primary">+ Novo Cliente</a>
         </div>
@@ -78,6 +86,7 @@
                         <th>Email</th>
                         <th>Telefone</th>
                         <th>Cidade/UF</th>
+                        <th>Tags</th>
                         <th>Status</th>
                         <th>Ações</th>
                     </tr>
@@ -88,6 +97,15 @@
                         <td th:text="${cliente.email}">email@example.com</td>
                         <td th:text="${cliente.telefone ?: '-'}">Telefone</td>
                         <td th:text="${cliente.cidade != null ? cliente.cidade + '/' + cliente.uf : '-'}">Cidade/UF</td>
+                        <td>
+                            <span th:if="${#lists.isEmpty(cliente.tags)}" class="text-muted">-</span>
+                            <div th:if="${!#lists.isEmpty(cliente.tags)}" class="tag-list">
+                                <span th:each="tag : ${cliente.tags}"
+                                      class="tag-badge"
+                                      th:style="'background-color:' + ${tag.cor}"
+                                      th:text="${tag.nome}">VIP</span>
+                            </div>
+                        </td>
                         <td>
                             <span class="badge"
                                   th:classappend="${cliente.ativo} ? 'badge-ativo' : 'badge-inativo'"
@@ -107,6 +125,9 @@
                     </tr>
                 </tbody>
             </table>
+
+            <!-- Barra de paginação -->
+            <div th:replace="~{fragments/paginacao :: paginacao(page=${clientesPage}, baseUrl='/empresas/' + ${empresa.id}, extraParams='')}"></div>
         </div>
     </main>
 </div>

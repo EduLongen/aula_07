@@ -6,6 +6,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -26,4 +28,8 @@ public class ClienteResponseDTO {
     private LocalDateTime dataCadastro;
     private Long empresaId;
     private String empresaNome;
+
+    /** Tags associadas a este cliente — inclui nome e cor para renderizar badges no UI */
+    @Builder.Default
+    private List<TagResponseDTO> tags = new ArrayList<>();
 }

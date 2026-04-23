@@ -1,14 +1,20 @@
 package com.saas.clienthub.controller.web;
 
+import com.saas.clienthub.model.dto.ClienteResponseDTO;
 import com.saas.clienthub.model.dto.EmpresaRequestDTO;
 import com.saas.clienthub.model.entity.Empresa;
 import com.saas.clienthub.model.entity.Plano;
 import com.saas.clienthub.model.entity.Role;
 import com.saas.clienthub.model.entity.Usuario;
+import com.saas.clienthub.model.dto.EmpresaResponseDTO;
 import com.saas.clienthub.service.ClienteService;
 import com.saas.clienthub.service.EmpresaService;
 import com.saas.clienthub.service.UsuarioService;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -89,7 +95,9 @@ public class EmpresaWebController {
      * GESTOR/USUARIO não veem a lista — são redirecionados para os detalhes da sua empresa.
      */
     @GetMapping
-    public String listar(Model model) {
+    public String listar(@RequestParam(defaultValue = "0") int page,
+                         @RequestParam(defaultValue = "5") int size,
+                         Model model) {
         Usuario usuario = usuarioService.getUsuarioLogado();
 
         // Não-ADMIN → redireciona direto para a página da sua empresa
@@ -97,7 +105,14 @@ public class EmpresaWebController {
             return "redirect:/empresas/" + usuario.getEmpresa().getId();
         }
 
-        model.addAttribute("empresas", empresaService.listarTodas());
+        Pageable pageable = PageRequest.of(page, size, Sort.by("nome"));
+        Page<EmpresaResponseDTO> empresasPage = empresaService.listarTodas(pageable);
+
+        model.addAttribute("empresasPage", empresasPage);
+        model.addAttribute("empresas", empresasPage.getContent());
+        model.addAttribute("currentPage", page);
+        model.addAttribute("totalPages", empresasPage.getTotalPages());
+        model.addAttribute("totalItems", empresasPage.getTotalElements());
         return "empresa/lista";
     }
 
@@ -147,13 +162,20 @@ public class EmpresaWebController {
     }
 
     /**
-     * GET /empresas/{id} → exibe a página de detalhes da empresa com seus clientes.
-     * Carrega tanto os dados da empresa quanto a lista de clientes do tenant.
+     * GET /empresas/{id} → exibe a página de detalhes da empresa com seus clientes paginados.
+     * Carrega tanto os dados da empresa quanto a lista paginada de clientes do tenant.
      */
     @GetMapping("/{id}")
-    public String detalhes(@PathVariable Long id, Model model) {
+    public String detalhes(@PathVariable Long id,
+                           @RequestParam(defaultValue = "0") int page,
+                           @RequestParam(defaultValue = "5") int size,
+                           Model model) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("nome"));
+        Page<ClienteResponseDTO> clientesPage = clienteService.listarPorEmpresa(id, pageable);
+
         model.addAttribute("empresa", empresaService.buscarPorId(id));
-        model.addAttribute("clientes", clienteService.listarPorEmpresa(id));
+        model.addAttribute("clientesPage", clientesPage);
+        model.addAttribute("clientes", clientesPage.getContent());
         return "empresa/detalhes";
     }
 
